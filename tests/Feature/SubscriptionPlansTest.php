@@ -121,6 +121,39 @@ class SubscriptionPlansTest extends TestCase
             ->assertDontSee((string) $inactivePlan->slug);
     }
 
+    public function test_pricing_catalog_hides_opposite_gender_plans_when_enforced(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        \App\Models\AdminSetting::setValue('plans_enforce_gender_specific_visibility', '1');
+
+        $maleUser = $this->createUserWithMatrimonyGender('male');
+
+        $this->actingAs($maleUser)
+            ->get(route('plans.index'))
+            ->assertOk()
+            ->assertSee('value="silver_male"', false)
+            ->assertDontSee('value="silver_female"', false)
+            ->assertDontSee('value="gold_female"', false)
+            ->assertDontSee('value="basic_female"', false);
+    }
+
+    public function test_pricing_feature_lines_allow_text_wrap_not_nowrap(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        $user = $this->createUserWithMatrimonyGender('male');
+
+        $html = $this->actingAs($user)
+            ->get(route('plans.index'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('break-words', $html);
+        $this->assertDoesNotMatchRegularExpression(
+            '/class="[^"]*whitespace-nowrap[^"]*"[^>]*>[^<]*per month/',
+            $html
+        );
+    }
+
     public function test_subscribe_does_not_create_subscription_before_payu(): void
     {
         $this->seed(SubscriptionPlansSeeder::class);

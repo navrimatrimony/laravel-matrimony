@@ -34,7 +34,7 @@
             @foreach ($secondaryFeatureRows as $feat)
                 <li class="flex gap-2.5 text-slate-700 dark:text-slate-200" role="listitem">
                     <span class="mt-0.5 shrink-0 text-emerald-600/80 dark:text-emerald-400/90" aria-hidden="true">✓</span>
-                    <span class="min-w-0 whitespace-nowrap">{{ $catalogLine($feat) }}</span>
+                    <span class="min-w-0 break-words leading-snug">{{ $catalogLine($feat) }}</span>
                 </li>
             @endforeach
         </ul>
@@ -51,7 +51,7 @@
                             role="listitem"
                         >
                             <x-plan.feature-highlight-icon :feature-key="(string) $feat->key" class="mt-0.5" />
-                            <span class="min-w-0 flex-1 text-sm leading-snug whitespace-nowrap">{{ $catalogLine($feat) }}</span>
+                            <span class="min-w-0 flex-1 text-sm leading-snug break-words">{{ $catalogLine($feat) }}</span>
                         </li>
                     @endforeach
                 </ul>
@@ -88,7 +88,7 @@
                         @foreach ($secondaryFeatureRows as $feat)
                             <li class="flex gap-2.5" role="listitem">
                                 <span class="mt-1.5 h-1 shrink-0 w-1 rounded-full bg-emerald-500/80" aria-hidden="true"></span>
-                                <span class="min-w-0 whitespace-nowrap">{{ $catalogLine($feat) }}</span>
+                                <span class="min-w-0 break-words leading-snug">{{ $catalogLine($feat) }}</span>
                             </li>
                         @endforeach
                     </ul>

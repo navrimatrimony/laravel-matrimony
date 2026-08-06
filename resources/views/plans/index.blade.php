@@ -87,6 +87,9 @@
     };
 
     $pricingPlans = $pricingPlans ?? collect();
+    /** Desktop carousel: size cards for up to 3 equal columns (no half-peek of a 4th). */
+    $pricingDesktopSlots = max(1, min(3, $pricingPlans->count()));
+    $pricingDesktopGapRem = ($pricingDesktopSlots - 1) * 1.25;
 
     $planSummaryItems = [];
     if (! empty($catalogIncludesInactive)) {
@@ -260,15 +263,23 @@
                 </div>
 
                 <div
-                    class="no-scrollbar flex snap-x snap-mandatory gap-5 overflow-x-auto overflow-y-visible px-1 pb-2 pt-4"
+                    class="no-scrollbar flex snap-x snap-mandatory items-stretch gap-5 overflow-x-auto overflow-y-visible px-1 pb-2 pt-4"
                     x-ref="track"
                     @scroll.debounce.100ms="check()"
                     @resize.window.debounce.150ms="check()"
                 >
+                <style>
+                    @media (min-width: 1024px) {
+                        .pricing-plan-card {
+                            width: var(--pricing-desktop-w);
+                            min-width: var(--pricing-desktop-w);
+                        }
+                    }
+                </style>
                 @foreach ($pricingPlans as $plan)
                     @php
                         $slug = strtolower((string) ($plan->slug ?? ''));
-                        $isGold = $slug === 'gold';
+                        $isGold = str_starts_with($slug, 'gold');
                         $isCurrent = $plan->id && $eff->id && (int) $plan->id === (int) $eff->id;
                         $visibleTerms = $plan->terms->where('is_visible', true)->sortBy('sort_order')->values();
                         $useTerms = $visibleTerms->isNotEmpty();
@@ -281,18 +292,20 @@
                             : 0;
                         [$primaryFeatureRows, $secondaryFeatureRows] = $partitionPricingFeatures($plan);
                         $marketingRibbonLabel = $pricingMarketingBadgeLabel($plan);
+                        $displayPlanName = preg_replace('/\s*\((male|female)\)\s*$/i', '', (string) $plan->name) ?? (string) $plan->name;
                     @endphp
                     <article
-                        class="relative flex w-[85vw] min-w-[85vw] snap-start flex-col rounded-2xl border bg-white shadow-lg transition-shadow sm:w-[22rem] sm:min-w-[22rem] lg:w-[calc((100%-3.75rem)/4)] lg:min-w-[calc((100%-3.75rem)/4)] dark:bg-slate-800/95
+                        class="pricing-plan-card relative flex w-[85vw] min-w-[85vw] snap-start flex-col self-stretch rounded-2xl border bg-white shadow-lg transition-shadow sm:w-[22rem] sm:min-w-[22rem] dark:bg-slate-800/95
                             {{ $isGold
-                                ? 'z-10 border-amber-400/90 shadow-xl shadow-amber-500/10 ring-2 ring-amber-400/50 dark:border-amber-500/60 dark:ring-amber-500/40 lg:scale-[1.03] lg:py-1'
+                                ? 'z-10 border-amber-400/90 shadow-xl shadow-amber-500/10 ring-2 ring-amber-400/50 dark:border-amber-500/60 dark:ring-amber-500/40'
                                 : 'border-slate-200 dark:border-slate-700' }}
                             {{ $isCurrent ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : '' }}"
+                        style="--pricing-desktop-w: calc((100% - {{ $pricingDesktopGapRem }}rem) / {{ $pricingDesktopSlots }});"
                         @if ($useTerms)
                             x-data="{ selectedBillingId: {{ $defaultBillingId }} }"
                         @endif
                     >
-                        @if ($isGold)
+                        @if ($isGold && $marketingRibbonLabel === null)
                             <div class="pointer-events-none absolute -top-3 left-1/2 z-20 max-w-[min(100%-1.5rem,18rem)] -translate-x-1/2 truncate rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-3 py-1 text-center text-[10px] font-extrabold uppercase tracking-wider text-white shadow-md sm:max-w-[min(100%-2rem,22rem)] sm:px-4 sm:text-xs" title="{{ __('subscriptions.pricing_most_popular') }}">
                                 {{ __('subscriptions.pricing_most_popular') }}
                             </div>
@@ -309,16 +322,14 @@
                             </span>
                         @endif
 
-                        @php
-                            $displayPlanName = preg_replace('/\s*\((male|female)\)\s*$/i', '', (string) $plan->name) ?? (string) $plan->name;
-                        @endphp
-                        <div class="flex flex-1 flex-col px-5 pb-6 pt-8 sm:px-6 sm:pb-7 sm:pt-9 {{ $isGold ? 'lg:px-7 lg:pb-8 lg:pt-10' : '' }}">
-                            <h2 class="text-xl font-bold text-slate-900 dark:text-white sm:text-2xl {{ $isGold ? 'lg:text-[1.65rem]' : '' }}">
+                        <div class="flex h-full min-h-0 flex-1 flex-col px-5 pb-6 pt-8 sm:px-6 sm:pb-7 sm:pt-9">
+                            <h2 class="min-h-[2rem] text-xl font-bold text-slate-900 dark:text-white sm:min-h-[2.25rem] sm:text-2xl">
                                 {{ $displayPlanName }}
                             </h2>
 
-                            @if ($useTerms)
-                                <div class="mt-4 flex flex-wrap gap-1.5" role="tablist" aria-label="{{ __('subscriptions.billing_period_label') }}">
+                            {{-- Equal-height billing toggle zone (spacer when fewer terms). --}}
+                            <div class="mt-4 flex min-h-[2.75rem] flex-wrap content-start gap-1.5" @if ($useTerms) role="tablist" aria-label="{{ __('subscriptions.billing_period_label') }}" @endif>
+                                @if ($useTerms)
                                     @foreach ($visibleTerms as $t)
                                         <button
                                             type="button"
@@ -333,46 +344,53 @@
                                             <x-plan.duration-label :days="$t->duration_days" class="pointer-events-none" />
                                         </button>
                                     @endforeach
-                                </div>
-                                @foreach ($visibleTerms as $t)
-                                    @php
-                                        $tList = (float) $t->price;
-                                        $tFinal = (float) $t->final_price;
-                                        $tDisc = $discountPercentForTerm($t);
-                                    @endphp
-                                    <div x-show="selectedBillingId === {{ (int) $t->id }}" x-cloak class="mt-4 space-y-2">
-                                        <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
-                                            <x-plan.duration-label :days="$t->duration_days" />
-                                        </p>
-                                        @if ($tDisc > 0)
-                                            <span class="inline-flex w-fit rounded-md bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-800 dark:bg-rose-950/70 dark:text-rose-200">
-                                                {{ __('subscriptions.discount_badge', ['percent' => $tDisc]) }}
-                                            </span>
-                                        @endif
-                                        <div class="flex flex-wrap items-end gap-x-3 gap-y-1">
-                                            @if ($tDisc > 0 && $tList > $tFinal + 0.004)
-                                                <span class="text-lg text-slate-400 line-through tabular-nums dark:text-slate-500">{{ number_format($tList) }}</span>
+                                @else
+                                    <span class="rounded-lg border border-indigo-600 bg-indigo-600 px-2.5 py-1 text-[11px] font-semibold text-white sm:text-xs">
+                                        <x-plan.duration-label :days="$plan->duration_days" class="pointer-events-none" />
+                                    </span>
+                                @endif
+                            </div>
+
+                            @if ($useTerms)
+                                <div class="mt-4 min-h-[5.5rem]">
+                                    @foreach ($visibleTerms as $t)
+                                        @php
+                                            $tList = (float) $t->price;
+                                            $tFinal = (float) $t->final_price;
+                                            $tDisc = $discountPercentForTerm($t);
+                                        @endphp
+                                        <div x-show="selectedBillingId === {{ (int) $t->id }}" x-cloak class="space-y-2">
+                                            @if ($tDisc > 0)
+                                                <span class="inline-flex w-fit rounded-md bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-800 dark:bg-rose-950/70 dark:text-rose-200">
+                                                    {{ __('subscriptions.discount_badge', ['percent' => $tDisc]) }}
+                                                </span>
+                                            @else
+                                                <span class="inline-flex h-[1.375rem] w-fit invisible select-none" aria-hidden="true">0%</span>
                                             @endif
-                                            <span class="text-3xl font-extrabold text-slate-900 tabular-nums dark:text-white">
-                                                ₹{{ number_format($tFinal) }}
-                                            </span>
+                                            <div class="flex flex-wrap items-end gap-x-3 gap-y-1">
+                                                @if ($tDisc > 0 && $tList > $tFinal + 0.004)
+                                                    <span class="text-lg text-slate-400 line-through tabular-nums dark:text-slate-500">{{ number_format($tList) }}</span>
+                                                @endif
+                                                <span class="text-3xl font-extrabold text-slate-900 tabular-nums dark:text-white">
+                                                    ₹{{ number_format($tFinal) }}
+                                                </span>
+                                            </div>
                                         </div>
-                                    </div>
-                                @endforeach
+                                    @endforeach
+                                </div>
                             @else
                                 @php
                                     $listPrice = (float) $plan->price;
                                     $finalPrice = (float) $plan->final_price;
                                     $legacyDisc = (int) ($plan->discount_percent ?? 0);
                                 @endphp
-                                <div class="mt-4 space-y-2">
-                                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
-                                        <x-plan.duration-label :days="$plan->duration_days" />
-                                    </p>
+                                <div class="mt-4 min-h-[5.5rem] space-y-2">
                                     @if ($legacyDisc > 0)
                                         <span class="inline-flex w-fit rounded-md bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-800 dark:bg-rose-950/70 dark:text-rose-200">
                                             {{ __('subscriptions.discount_badge', ['percent' => $legacyDisc]) }}
                                         </span>
+                                    @else
+                                        <span class="inline-flex h-[1.375rem] w-fit invisible select-none" aria-hidden="true">0%</span>
                                     @endif
                                     <div class="flex flex-wrap items-end gap-x-3 gap-y-1">
                                         @if ($legacyDisc > 0 && $listPrice > $finalPrice + 0.004)
@@ -385,36 +403,38 @@
                                 </div>
                             @endif
 
-                            @if ($useTerms)
-                                @foreach ($visibleTerms as $termCatalog)
+                            <div class="mt-2 flex min-h-0 flex-1 flex-col">
+                                @if ($useTerms)
+                                    @foreach ($visibleTerms as $termCatalog)
+                                        @include('plans.partials.pricing-plan-features', [
+                                            'planId' => $plan->id,
+                                            'primaryFeatureRows' => $primaryFeatureRows,
+                                            'secondaryFeatureRows' => $secondaryFeatureRows,
+                                            'quotaBonusPercent' => (int) ($termCatalog->quota_bonus_percent ?? 0),
+                                            'durationMultiplier' => \App\Models\PlanTerm::quotaDurationMultiplierFor(
+                                                (string) $termCatalog->billing_key,
+                                                (int) $termCatalog->duration_days
+                                            ),
+                                            'billingDurationType' => (string) $termCatalog->billing_key,
+                                            'selectedBillingId' => (int) $termCatalog->id,
+                                            'wrapInBillingToggle' => true,
+                                        ])
+                                    @endforeach
+                                @else
                                     @include('plans.partials.pricing-plan-features', [
                                         'planId' => $plan->id,
                                         'primaryFeatureRows' => $primaryFeatureRows,
                                         'secondaryFeatureRows' => $secondaryFeatureRows,
-                                        'quotaBonusPercent' => (int) ($termCatalog->quota_bonus_percent ?? 0),
-                                        'durationMultiplier' => \App\Models\PlanTerm::quotaDurationMultiplierFor(
-                                            (string) $termCatalog->billing_key,
-                                            (int) $termCatalog->duration_days
-                                        ),
-                                        'billingDurationType' => (string) $termCatalog->billing_key,
-                                        'selectedBillingId' => (int) $termCatalog->id,
-                                        'wrapInBillingToggle' => true,
+                                        'quotaBonusPercent' => 0,
+                                        'durationMultiplier' => 1.0,
+                                        'billingDurationType' => null,
+                                        'selectedBillingId' => 0,
+                                        'wrapInBillingToggle' => false,
                                     ])
-                                @endforeach
-                            @else
-                                @include('plans.partials.pricing-plan-features', [
-                                    'planId' => $plan->id,
-                                    'primaryFeatureRows' => $primaryFeatureRows,
-                                    'secondaryFeatureRows' => $secondaryFeatureRows,
-                                    'quotaBonusPercent' => 0,
-                                    'durationMultiplier' => 1.0,
-                                    'billingDurationType' => null,
-                                    'selectedBillingId' => 0,
-                                    'wrapInBillingToggle' => false,
-                                ])
-                            @endif
+                                @endif
+                            </div>
 
-                            <div class="mt-8">
+                            <div class="mt-auto pt-8">
                                 @if (! $plan->is_active)
                                     <span class="inline-flex w-full justify-center rounded-xl bg-slate-100 px-4 py-3.5 text-sm font-medium text-slate-600 dark:bg-slate-900 dark:text-slate-400">
                                         {{ __('subscriptions.plan_not_available_signup') }}
@@ -432,7 +452,7 @@
                                         @endif
                                         <button
                                             type="submit"
-                                            class="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg transition hover:from-indigo-500 hover:to-violet-500 hover:shadow-xl active:scale-[0.98] {{ $isGold ? 'py-4 text-base shadow-indigo-500/25' : '' }}"
+                                            class="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg transition hover:from-indigo-500 hover:to-violet-500 hover:shadow-xl active:scale-[0.98]"
                                         >
                                             {{ __('subscriptions.pricing_cta_upgrade') }}
                                         </button>
@@ -440,7 +460,7 @@
                                 @else
                                     <a
                                         href="{{ route('login') }}"
-                                        class="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg transition hover:from-indigo-500 hover:to-violet-500 hover:shadow-xl active:scale-[0.98] {{ $isGold ? 'py-4 text-base' : '' }}"
+                                        class="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg transition hover:from-indigo-500 hover:to-violet-500 hover:shadow-xl active:scale-[0.98]"
                                     >
                                         {{ __('subscriptions.pricing_cta_sign_in') }}
                                     </a>
