@@ -46,10 +46,12 @@
             <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Suspended</p>
             <p class="text-2xl font-bold text-amber-600 mt-1">{{ $suspendedProfiles }}</p>
         </div>
+        @if ($showcaseProfilesEnabled ?? true)
         <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 p-5">
             <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Showcase</p>
             <p class="text-2xl font-bold text-sky-600 mt-1">{{ $showcaseProfilesCount }}</p>
         </div>
+        @endif
     </div>
 
     <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">Business metrics</h2>

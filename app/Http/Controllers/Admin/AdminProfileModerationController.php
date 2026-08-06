@@ -132,6 +132,8 @@ class AdminProfileModerationController extends Controller
                 });
         }
 
+        \App\Support\ShowcaseFeatureGate::excludeShowcaseWhenDisabled($profilesQuery);
+
         match ($filters['sort']) {
             'matrimony_id_asc' => $profilesQuery->orderBy('id'),
             'latest' => $profilesQuery->latest(),
@@ -154,6 +156,8 @@ class AdminProfileModerationController extends Controller
     public function showProfile(string $id)
     {
         $profile = MatrimonyProfile::withTrashed()->findOrFail($id);
+
+        \App\Support\ShowcaseFeatureGate::abortIfDisabledProfile($profile);
 
         if (request()->boolean('edit')) {
             session(['admin_edit_profile_id' => (int) $profile->id]);

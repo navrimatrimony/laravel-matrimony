@@ -23,6 +23,10 @@ class AutoShowcaseEngine
      */
     public function evaluateAfterSearchCounts(Request $request, ?User $user, int $totalCount, int $strictCount): array
     {
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            return $this->logReturn('skipped_feature_flag_off', false, null);
+        }
+
         if (! AutoShowcaseSettings::engineEnabled()) {
             return $this->logReturn('skipped_engine_off', false, null);
         }

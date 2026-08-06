@@ -68,6 +68,12 @@ class MobileDiscoveryFilterService
         if ((int) $target->id === (int) $viewerProfile->id) {
             return false;
         }
+        if (
+            $target->isShowcaseProfile()
+            && ! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)
+        ) {
+            return false;
+        }
         if ((int) $target->user_id === (int) $viewer->id) {
             return false;
         }

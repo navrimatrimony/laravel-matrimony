@@ -88,6 +88,7 @@ class ChatController extends Controller
         }
 
         $receiver = $matrimony_profile;
+        \App\Support\ShowcaseFeatureGate::abortIfDisabledProfile($receiver);
         $decision = $this->policy->canStartConversation($me, $receiver);
         if (! $decision->allowed) {
             if ($request->wantsJson() || $request->expectsJson()) {
@@ -130,6 +131,8 @@ class ChatController extends Controller
         if (! $other) {
             abort(404);
         }
+
+        \App\Support\ShowcaseFeatureGate::abortIfDisabledProfile($other);
 
         $showcaseTag = app(ShowcaseConversationTagService::class)->shouldShowTagForConversation($conversation, $me, $other);
 

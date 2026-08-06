@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\FeatureFlagController;
 use App\Http\Controllers\AbuseReportController;
 use App\Http\Controllers\Admin\AdminCapabilityController;
 use App\Http\Controllers\Admin\AdminBulkIntakeController;
@@ -80,7 +81,11 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
         $totalProfiles = \App\Models\MatrimonyProfile::count();
         $activeProfiles = \App\Models\MatrimonyProfile::where('is_suspended', false)->count();
         $suspendedProfiles = \App\Models\MatrimonyProfile::where('is_suspended', true)->count();
-        $showcaseProfilesCount = \App\Models\MatrimonyProfile::query()->whereShowcase()->count();
+        $showcaseProfilesEnabled = app(\App\Services\FeatureFlagService::class)
+            ->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES);
+        $showcaseProfilesCount = $showcaseProfilesEnabled
+            ? \App\Models\MatrimonyProfile::query()->whereShowcase()->count()
+            : 0;
         $pendingAbuseReports = \App\Models\AbuseReport::where('status', 'open')->count();
         $totalBiodataIntakes = \App\Models\BiodataIntake::count();
 
@@ -124,6 +129,7 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
             'activeProfiles' => $activeProfiles,
             'suspendedProfiles' => $suspendedProfiles,
             'showcaseProfilesCount' => $showcaseProfilesCount,
+            'showcaseProfilesEnabled' => $showcaseProfilesEnabled,
             'pendingAbuseReports' => $pendingAbuseReports,
             'totalBiodataIntakes' => $totalBiodataIntakes,
             'intakeLast7Count' => $last7Count,
@@ -177,9 +183,11 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
 
     Route::get('/showcase', function () {
         return redirect()->route('admin.showcase-dashboard.index');
-    })->name('showcase.index');
+    })->middleware('feature:showcase_profiles_enabled')->name('showcase.index');
 
-    Route::get('/showcase-dashboard', [ShowcaseEngineDashboardController::class, 'index'])->name('showcase-dashboard.index');
+    Route::middleware('feature:showcase_profiles_enabled')->group(function () {
+        Route::get('/showcase-dashboard', [ShowcaseEngineDashboardController::class, 'index'])->name('showcase-dashboard.index');
+    });
 
     /*
     | Profiles List (Admin)
@@ -396,31 +404,42 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
         Route::get('/locations/{location}/possible-duplicates', [CanonicalLocationAdminController::class, 'possibleDuplicates']);
     });
 
-    Route::get('/auto-showcase-settings', [AutoShowcaseSettingsController::class, 'edit'])->name('auto-showcase-settings.edit');
-    Route::post('/auto-showcase-settings', [AutoShowcaseSettingsController::class, 'update'])->name('auto-showcase-settings.update');
+    Route::middleware('feature:showcase_profiles_enabled')->group(function () {
+        Route::get('/auto-showcase-settings', [AutoShowcaseSettingsController::class, 'edit'])->name('auto-showcase-settings.edit');
+        Route::post('/auto-showcase-settings', [AutoShowcaseSettingsController::class, 'update'])->name('auto-showcase-settings.update');
 
-    Route::get('/showcase-photo-pool', [ShowcasePhotoPoolController::class, 'index'])->name('showcase-photo-pool.index');
-    Route::post('/showcase-photo-pool', [ShowcasePhotoPoolController::class, 'store'])->name('showcase-photo-pool.store');
-    Route::post('/showcase-photo-pool/delete', [ShowcasePhotoPoolController::class, 'destroy'])->name('showcase-photo-pool.destroy');
+        Route::get('/showcase-photo-pool', [ShowcasePhotoPoolController::class, 'index'])->name('showcase-photo-pool.index');
+        Route::post('/showcase-photo-pool', [ShowcasePhotoPoolController::class, 'store'])->name('showcase-photo-pool.store');
+        Route::post('/showcase-photo-pool/delete', [ShowcasePhotoPoolController::class, 'destroy'])->name('showcase-photo-pool.destroy');
 
-    Route::get('/showcase-profile/bulk-create', [ShowcaseProfileController::class, 'bulkCreate'])->name('showcase-profile.bulk-create');
-    Route::post('/showcase-profiles/bulk', [ShowcaseProfileController::class, 'bulkStore'])->name('showcase-profile.bulk-store');
-    Route::post('/showcase-profiles/{profile}/publish', [ShowcaseProfileController::class, 'publish'])->name('showcase-profile.publish');
-    Route::post('/showcase-profiles/{profile}/delete', [ShowcaseProfileController::class, 'delete'])->name('showcase-profile.delete');
+        Route::get('/showcase-profile/bulk-create', [ShowcaseProfileController::class, 'bulkCreate'])->name('showcase-profile.bulk-create');
+        Route::post('/showcase-profiles/bulk', [ShowcaseProfileController::class, 'bulkStore'])->name('showcase-profile.bulk-store');
+        Route::post('/showcase-profiles/{profile}/publish', [ShowcaseProfileController::class, 'publish'])->name('showcase-profile.publish');
+        Route::post('/showcase-profiles/{profile}/delete', [ShowcaseProfileController::class, 'delete'])->name('showcase-profile.delete');
 
-    /*
-    | Showcase Chat Orchestration (production-safe)
-    */
-    Route::get('/showcase-chat-settings', [ShowcaseChatSettingsController::class, 'index'])->name('showcase-chat-settings.index');
-    Route::get('/showcase-chat-settings/{profile}', [ShowcaseChatSettingsController::class, 'show'])->name('showcase-chat-settings.show');
-    Route::put('/showcase-chat-settings/{profile}', [ShowcaseChatSettingsController::class, 'update'])->name('showcase-chat-settings.update');
+        /*
+        | Showcase Chat Orchestration (production-safe)
+        */
+        Route::get('/showcase-chat-settings', [ShowcaseChatSettingsController::class, 'index'])->name('showcase-chat-settings.index');
+        Route::get('/showcase-chat-settings/{profile}', [ShowcaseChatSettingsController::class, 'show'])->name('showcase-chat-settings.show');
+        Route::put('/showcase-chat-settings/{profile}', [ShowcaseChatSettingsController::class, 'update'])->name('showcase-chat-settings.update');
 
-    Route::get('/showcase-conversations', [ShowcaseConversationController::class, 'index'])->name('showcase-conversations.index');
-    Route::get('/showcase-chat/debug/{conversation}', [ShowcaseChatDebugController::class, 'show'])->name('showcase-chat.debug');
-    Route::get('/showcase-conversations/{conversation}', [ShowcaseConversationController::class, 'show'])->name('showcase-conversations.show');
-    Route::post('/showcase-conversations/{conversation}/pause', [ShowcaseConversationController::class, 'pause'])->name('showcase-conversations.pause');
-    Route::post('/showcase-conversations/{conversation}/resume', [ShowcaseConversationController::class, 'resume'])->name('showcase-conversations.resume');
-    Route::post('/showcase-conversations/{conversation}/reply', [ShowcaseConversationController::class, 'replyAsShowcase'])->name('showcase-conversations.reply');
+        Route::get('/showcase-conversations', [ShowcaseConversationController::class, 'index'])->name('showcase-conversations.index');
+        Route::get('/showcase-chat/debug/{conversation}', [ShowcaseChatDebugController::class, 'show'])->name('showcase-chat.debug');
+        Route::get('/showcase-conversations/{conversation}', [ShowcaseConversationController::class, 'show'])->name('showcase-conversations.show');
+        Route::post('/showcase-conversations/{conversation}/pause', [ShowcaseConversationController::class, 'pause'])->name('showcase-conversations.pause');
+        Route::post('/showcase-conversations/{conversation}/resume', [ShowcaseConversationController::class, 'resume'])->name('showcase-conversations.resume');
+        Route::post('/showcase-conversations/{conversation}/reply', [ShowcaseConversationController::class, 'replyAsShowcase'])->name('showcase-conversations.reply');
+
+        Route::get('/view-back-settings', [AdminSettingsController::class, 'viewBackSettings'])->name('view-back-settings.index');
+        Route::post('/view-back-settings', [AdminSettingsController::class, 'updateViewBackSettings'])->name('view-back-settings.update');
+        Route::post('/view-back-settings/random-views', [AdminSettingsController::class, 'updateShowcaseRandomViewSettings'])->name('view-back-settings.random-views-update');
+        Route::get('/showcase-interest-settings', [AdminSettingsController::class, 'showcaseInterestSettings'])->name('showcase-interest-settings.index');
+        Route::post('/showcase-interest-settings', [AdminSettingsController::class, 'updateShowcaseInterestSettings'])->name('showcase-interest-settings.update');
+
+        Route::get('/showcase-search-settings', [AdminSettingsController::class, 'showcaseSearchSettings'])->name('showcase-search-settings.index');
+        Route::post('/showcase-search-settings', [AdminSettingsController::class, 'updateShowcaseSearchSettings'])->name('showcase-search-settings.update');
+    });
 
     /*
     | Verification Tags
@@ -441,6 +460,12 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
     Route::delete('/serious-intents/{id}', [AdminSeriousIntentController::class, 'destroy'])->name('serious-intents.destroy');
     Route::get('/serious-intents/{id}/restore-confirm', [AdminSeriousIntentController::class, 'restoreConfirm'])->name('serious-intents.restore-confirm');
     Route::post('/serious-intents/{id}/restore', [AdminSeriousIntentController::class, 'restore'])->name('serious-intents.restore');
+
+    /*
+    | Feature Flags (global module switches)
+    */
+    Route::get('/feature-flags', [FeatureFlagController::class, 'index'])->name('feature-flags.index');
+    Route::post('/feature-flags/{featureFlag}', [FeatureFlagController::class, 'update'])->name('feature-flags.update');
 
     /*
     | Admin Capabilities
@@ -467,15 +492,6 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
     Route::get('/who-viewed-teaser-settings', static function () {
         return redirect()->route('admin.teaser-settings.index', ['tab' => 'who-viewed']);
     })->name('who-viewed-teaser-settings.index');
-
-    Route::get('/view-back-settings', [AdminSettingsController::class, 'viewBackSettings'])->name('view-back-settings.index');
-    Route::post('/view-back-settings', [AdminSettingsController::class, 'updateViewBackSettings'])->name('view-back-settings.update');
-    Route::post('/view-back-settings/random-views', [AdminSettingsController::class, 'updateShowcaseRandomViewSettings'])->name('view-back-settings.random-views-update');
-    Route::get('/showcase-interest-settings', [AdminSettingsController::class, 'showcaseInterestSettings'])->name('showcase-interest-settings.index');
-    Route::post('/showcase-interest-settings', [AdminSettingsController::class, 'updateShowcaseInterestSettings'])->name('showcase-interest-settings.update');
-
-    Route::get('/showcase-search-settings', [AdminSettingsController::class, 'showcaseSearchSettings'])->name('showcase-search-settings.index');
-    Route::post('/showcase-search-settings', [AdminSettingsController::class, 'updateShowcaseSearchSettings'])->name('showcase-search-settings.update');
 
     Route::get('/photo-approval-settings', [AdminSettingsController::class, 'photoApprovalSettings'])->name('photo-approval-settings.index');
     Route::post('/photo-approval-settings', [AdminSettingsController::class, 'updatePhotoApprovalSettings'])->name('photo-approval-settings.update');

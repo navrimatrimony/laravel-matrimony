@@ -34,6 +34,10 @@ final class ShowcaseRandomViewService
      */
     public function run(): int
     {
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            return 0;
+        }
+
         if (! AdminSetting::getBool('showcase_random_view_enabled', false)) {
             return 0;
         }

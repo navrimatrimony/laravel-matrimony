@@ -36,6 +36,9 @@ class ProfileShowReadService
         if (! $showcaseVisible) {
             $q->whereNonShowcase();
         }
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            $q->whereNonShowcase();
+        }
 
         $myId = $viewer->matrimonyProfile?->id;
         if ($myId) {

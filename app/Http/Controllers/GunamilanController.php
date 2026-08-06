@@ -123,6 +123,8 @@ class GunamilanController extends Controller
 
         $profile = $this->targetProfile($matrimony_profile_id);
 
+        \App\Support\ShowcaseFeatureGate::abortIfDisabledProfile($profile);
+
         if ((int) $viewerProfile->id === (int) $profile->id) {
             return redirect()
                 ->route('matrimony.profile.show', $profile)

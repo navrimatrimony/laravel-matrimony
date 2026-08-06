@@ -34,6 +34,10 @@ class ShowcaseOutgoingInterestSenderService
      */
     public function run(int $batch = 50): array
     {
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            return ['created' => 0, 'skipped' => 0];
+        }
+
         if (! AdminSetting::getBool(ShowcaseInterestPolicyService::KEY_PREFIX.'outgoing_auto_send_enabled', false)) {
             return ['created' => 0, 'skipped' => 0];
         }

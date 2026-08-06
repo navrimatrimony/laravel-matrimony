@@ -41,6 +41,10 @@ class ProcessDelayedViewBack implements ShouldQueue
      */
     public function handle(): void
     {
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            return;
+        }
+
         // Re-check 24h cap at execution time (delay may have passed since dispatch)
         $since = now()->subDay();
         $exists = ProfileView::where('viewer_profile_id', $this->showcaseProfileId)

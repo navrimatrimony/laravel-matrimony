@@ -27,6 +27,10 @@ class ShowcaseIncomingInterestResponderService
      */
     public function processPending(int $limit = 150): array
     {
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            return ['accepted' => 0, 'rejected' => 0, 'skipped' => 0];
+        }
+
         if (! AdminSetting::getBool(ShowcaseInterestPolicyService::KEY_PREFIX.'incoming_auto_respond_enabled', false)) {
             return ['accepted' => 0, 'rejected' => 0, 'skipped' => 0];
         }

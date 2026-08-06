@@ -35,6 +35,10 @@ class ProcessDelayedShowcaseRandomView implements ShouldQueue
 
     public function handle(): void
     {
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            return;
+        }
+
         // Re-checked here because other showcase views may have landed on this member
         // between dispatch and execution — the gap rule is about the member, not the pair.
         if (! ShowcaseRandomViewService::minGapSatisfiedForReal($this->realProfileId)) {

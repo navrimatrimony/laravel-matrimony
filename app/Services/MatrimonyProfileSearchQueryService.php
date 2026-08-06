@@ -258,6 +258,9 @@ class MatrimonyProfileSearchQueryService
             if (! $showcaseVisibleInSearch) {
                 $query->whereNonShowcase();
             }
+            if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+                $query->whereNonShowcase();
+            }
 
             if (\App\Models\AdminSetting::getBool('search_opposite_gender_only', false) && auth()->check()) {
                 $viewerProfile = auth()->user()->matrimonyProfile;
@@ -506,6 +509,9 @@ class MatrimonyProfileSearchQueryService
 
         $showcaseVisibleInSearch = \App\Models\AdminSetting::getBool('showcase_profiles_visible_in_search', true);
         if (! $showcaseVisibleInSearch) {
+            $query->whereNonShowcase();
+        }
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
             $query->whereNonShowcase();
         }
 

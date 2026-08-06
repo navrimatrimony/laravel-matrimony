@@ -36,6 +36,7 @@ class DatabaseSeeder extends Seeder
             PlanStandardFeatureKeysSeeder::class,
             PlanFeatureSeeder::class,
             SystemRulesSeeder::class,
+            FeatureFlagSeeder::class,
         ]);
     }
 }

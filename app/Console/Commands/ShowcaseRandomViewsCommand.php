@@ -13,6 +13,12 @@ class ShowcaseRandomViewsCommand extends Command
 
     public function handle(ShowcaseRandomViewService $service): int
     {
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            $this->info('Showcase Profiles feature is disabled; skipping.');
+
+            return self::SUCCESS;
+        }
+
         $n = $service->run();
         $this->info("Showcase random views created: {$n}");
 

@@ -73,6 +73,9 @@ class ViewTrackingService
         if (! $viewed->isShowcaseProfile() || $viewer->isShowcaseProfile()) {
             return;
         }
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            return;
+        }
 
         $enabled = \App\Models\AdminSetting::getBool('view_back_enabled', false);
         if (! $enabled) {
@@ -127,6 +130,9 @@ class ViewTrackingService
      */
     private static function createViewBackNow(MatrimonyProfile $showcaseProfile, MatrimonyProfile $realProfile): void
     {
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            return;
+        }
         if (! self::canShowcaseCreateToRealViewToday($showcaseProfile)) {
             return;
         }
@@ -149,6 +155,9 @@ class ViewTrackingService
      */
     public static function recordShowcaseRandomProfileView(MatrimonyProfile $showcaseProfile, MatrimonyProfile $realProfile): void
     {
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            return;
+        }
         if ($showcaseProfile->id === $realProfile->id) {
             return;
         }
@@ -258,6 +267,12 @@ class ViewTrackingService
     public static function notifyProfileViewIfEligible(?User $owner, MatrimonyProfile $viewerProfile, bool $isViewBack): void
     {
         if (! $owner) {
+            return;
+        }
+        if (
+            $viewerProfile->isShowcaseProfile()
+            && ! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)
+        ) {
             return;
         }
         $viewerProfile->loadMissing('user');

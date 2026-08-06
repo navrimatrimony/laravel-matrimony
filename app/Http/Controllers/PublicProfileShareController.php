@@ -25,6 +25,13 @@ class PublicProfileShareController extends Controller
             ])
             ->findOrFail($id);
 
+        if (
+            $profile->isShowcaseProfile()
+            && ! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)
+        ) {
+            abort(404, 'Feature Disabled');
+        }
+
         if (! ProfileLifecycleService::isVisibleToOthers($profile)) {
             abort(404);
         }

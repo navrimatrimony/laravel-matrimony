@@ -27,6 +27,12 @@ class ShowcaseChatTickCommand extends Command
      */
     public function handle(): int
     {
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            $this->info('Showcase Profiles feature is disabled; skipping.');
+
+            return self::SUCCESS;
+        }
+
         $count = app(ShowcaseOrchestrationService::class)->processDueEvents();
 
         app(ShowcasePresenceService::class)->syncLastSeenFromActiveSessions();

@@ -21,6 +21,9 @@ class ShowcaseConversationTagService
         if (! $other->isShowcaseProfile()) {
             return false;
         }
+        if (! \App\Support\ShowcaseFeatureGate::isEnabled()) {
+            return false;
+        }
 
         $s = $this->settings->getOrCreateForProfile($other);
         return (bool) ($s->enabled && $s->ai_assisted_replies_enabled);

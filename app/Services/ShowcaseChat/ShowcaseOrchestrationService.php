@@ -521,6 +521,10 @@ class ShowcaseOrchestrationService
 
     public function processDueEvents(): int
     {
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            return 0;
+        }
+
         $processed = 0;
 
         $states = ShowcaseConversationState::query()

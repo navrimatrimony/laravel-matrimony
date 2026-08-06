@@ -15,6 +15,12 @@ class ShowcaseSendOutgoingInterestsCommand extends Command
 
     public function handle(ShowcaseOutgoingInterestSenderService $sender): int
     {
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            $this->info('Showcase Profiles feature is disabled; skipping.');
+
+            return self::SUCCESS;
+        }
+
         $batch = $this->resolveBatchSize();
         $r = $sender->run($batch);
         $this->info(sprintf('created=%d skipped=%d', $r['created'], $r['skipped']));

@@ -96,6 +96,10 @@ class ShowcaseInterestPolicyService
     {
         $bypassPlan = $this->shouldBypassPlanSendQuota($sender);
 
+        if ($this->moduleDisabledForShowcasePair($sender, $receiver)) {
+            return $this->deny('Feature Disabled', $bypassPlan);
+        }
+
         if (! AdminSetting::getBool(self::KEY_PREFIX.'rules_enabled', false)) {
             if ($msg = $this->maybeDenyByStochastic('send', $sender, $receiver)) {
                 return $this->deny($msg, $bypassPlan);
@@ -218,6 +222,10 @@ class ShowcaseInterestPolicyService
             return null;
         }
 
+        if ($this->moduleDisabledForShowcasePair($sender, $receiver)) {
+            return 'Feature Disabled';
+        }
+
         if (! AdminSetting::getBool(self::KEY_PREFIX.'rules_enabled', false)) {
             if ($ignoreStochastic) {
                 return null;
@@ -263,6 +271,10 @@ class ShowcaseInterestPolicyService
             return null;
         }
 
+        if ($this->moduleDisabledForShowcasePair($sender, $receiver)) {
+            return 'Feature Disabled';
+        }
+
         if ($ignoreStochastic) {
             return null;
         }
@@ -274,6 +286,11 @@ class ShowcaseInterestPolicyService
     {
         $interest->loadMissing('receiverProfile');
 
+        $receiver = $interest->receiverProfile;
+        if ($receiver && $this->moduleDisabledForShowcasePair($withdrawerSender, $receiver)) {
+            return 'Feature Disabled';
+        }
+
         if (! AdminSetting::getBool(self::KEY_PREFIX.'rules_enabled', false)) {
             return null;
         }
@@ -282,7 +299,6 @@ class ShowcaseInterestPolicyService
             return null;
         }
 
-        $receiver = $interest->receiverProfile;
         if (! $receiver) {
             return null;
         }
@@ -404,5 +420,19 @@ class ShowcaseInterestPolicyService
         }
 
         return $diff <= $gapYears;
+    }
+
+    /**
+     * Global module kill-switch. Identity checks (isShowcase) stay;
+     * this only answers "is the Showcase module allowed to run?".
+     */
+    private function moduleDisabledForShowcasePair(MatrimonyProfile $a, MatrimonyProfile $b): bool
+    {
+        if (! $a->isShowcaseProfile() && ! $b->isShowcaseProfile()) {
+            return false;
+        }
+
+        return ! app(\App\Services\FeatureFlagService::class)
+            ->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES);
     }
 }

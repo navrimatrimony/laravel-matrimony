@@ -236,7 +236,11 @@ class ChatPolicyService
             return true;
         }
 
-        return $profile->isShowcaseProfile();
+        if ($profile->isShowcaseProfile()) {
+            return \App\Support\ShowcaseFeatureGate::isEnabled();
+        }
+
+        return false;
     }
 
     protected function isPairBlocked(int $aProfileId, int $bProfileId): bool

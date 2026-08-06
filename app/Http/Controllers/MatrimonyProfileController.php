@@ -1161,6 +1161,13 @@ class MatrimonyProfileController extends Controller
             'user',
         ])->findOrFail($matrimony_profile_id);
 
+        if (
+            $profile->isShowcaseProfile()
+            && ! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)
+        ) {
+            abort(404, 'Feature Disabled');
+        }
+
         $extendedAttributes = \Illuminate\Support\Facades\DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first();
         $preferenceCriteria = \Illuminate\Support\Facades\DB::table('profile_preference_criteria')->where('profile_id', $profile->id)->first();
         $preferredReligionIds = \Illuminate\Support\Facades\DB::table('profile_preferred_religions')->where('profile_id', $profile->id)->pluck('religion_id')->all();

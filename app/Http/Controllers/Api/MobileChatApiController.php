@@ -98,6 +98,10 @@ class MobileChatApiController extends Controller
             return $this->error('Profile not found.', 404);
         }
 
+        if ($target->isShowcaseProfile() && ! \App\Support\ShowcaseFeatureGate::isEnabled()) {
+            return $this->error('Feature Disabled', 404);
+        }
+
         $existing = $this->conversations->findConversationBetweenProfiles((int) $me->id, (int) $target->id);
         if (! $existing instanceof Conversation) {
             $decision = $this->policy->canStartConversation($me, $target);
@@ -138,6 +142,10 @@ class MobileChatApiController extends Controller
         $other = $this->conversations->getOtherParticipant($conversation, $me);
         if (! $other instanceof MatrimonyProfile) {
             return $this->error('Chat participant not found.', 404);
+        }
+
+        if ($other->isShowcaseProfile() && ! \App\Support\ShowcaseFeatureGate::isEnabled()) {
+            return $this->error('Feature Disabled', 404);
         }
 
         $sinceId = max(0, (int) $request->query('since_id', 0));

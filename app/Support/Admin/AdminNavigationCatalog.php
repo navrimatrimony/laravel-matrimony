@@ -2,6 +2,8 @@
 
 namespace App\Support\Admin;
 
+use App\Services\FeatureFlagService;
+use App\Support\FeatureFlagKey;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
@@ -184,10 +186,23 @@ final class AdminNavigationCatalog
                 'label' => 'System & Access',
                 'description' => 'Admin access controls and system administration surfaces.',
                 'tabs' => [
+                    self::tab('Feature Flags', 'admin.feature-flags.index', ['admin.feature-flags.*']),
                     self::tab('Admin Capabilities', 'admin.admin-capabilities.index', ['admin.admin-capabilities.*'], 'is_super_admin'),
                 ],
             ],
         ];
+    }
+
+    /**
+     * Module sections may be hidden by a global feature flag without deleting nav config.
+     */
+    private static function moduleIsFeatureEnabled(string $sectionKey): bool
+    {
+        if ($sectionKey === AdminNavigationAccess::SHOWCASE_ENGINE) {
+            return app(FeatureFlagService::class)->isEnabled(FeatureFlagKey::SHOWCASE_PROFILES);
+        }
+
+        return true;
     }
 
     /**
@@ -219,6 +234,9 @@ final class AdminNavigationCatalog
 
         foreach (self::modules() as $sectionKey => $module) {
             if (! (bool) ($access[$sectionKey] ?? false)) {
+                continue;
+            }
+            if (! self::moduleIsFeatureEnabled($sectionKey)) {
                 continue;
             }
 
@@ -254,6 +272,9 @@ final class AdminNavigationCatalog
             if (! (bool) ($access[$sectionKey] ?? false)) {
                 continue;
             }
+            if (! self::moduleIsFeatureEnabled($sectionKey)) {
+                continue;
+            }
 
             $tabs = self::visibleTabs($module['tabs'], $abilities, $routeName, $query);
             if ($tabs === []) {
@@ -285,6 +306,9 @@ final class AdminNavigationCatalog
 
         foreach (self::modules() as $sectionKey => $module) {
             if (! (bool) ($access[$sectionKey] ?? false)) {
+                continue;
+            }
+            if (! self::moduleIsFeatureEnabled($sectionKey)) {
                 continue;
             }
 

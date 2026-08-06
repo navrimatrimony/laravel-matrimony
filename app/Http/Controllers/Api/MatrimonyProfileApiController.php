@@ -2518,6 +2518,16 @@ class MatrimonyProfileApiController extends Controller
             ], 404);
         }
 
+        if (
+            $profile->isShowcaseProfile()
+            && ! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Feature Disabled',
+            ], 404);
+        }
+
         $user = request()->user();
         if (! $user instanceof User || ! $discovery->isAllowedTarget($user, $profile)) {
             return response()->json([

@@ -13,6 +13,12 @@ class ShowcaseRespondIncomingInterestsCommand extends Command
 
     public function handle(ShowcaseIncomingInterestResponderService $responder): int
     {
+        if (! app(\App\Services\FeatureFlagService::class)->isEnabled(\App\Support\FeatureFlagKey::SHOWCASE_PROFILES)) {
+            $this->info('Showcase Profiles feature is disabled; skipping.');
+
+            return self::SUCCESS;
+        }
+
         $limit = max(1, min(5000, (int) $this->option('limit')));
         $r = $responder->processPending($limit);
         $this->info(sprintf('accepted=%d rejected=%d skipped=%d', $r['accepted'], $r['rejected'], $r['skipped']));
