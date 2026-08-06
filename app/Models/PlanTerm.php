@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Validation\ValidationException;
+use App\Support\PlanPricing;
 
 class PlanTerm extends Model
 {
@@ -25,6 +26,8 @@ class PlanTerm extends Model
         'billing_key',
         'duration_days',
         'price',
+        'selling_price',
+        /** @deprecated Display-only legacy column; never use for payable amount. */
         'discount_percent',
         'quota_bonus_percent',
         'is_visible',
@@ -34,6 +37,7 @@ class PlanTerm extends Model
     protected $casts = [
         'duration_days' => 'integer',
         'price' => 'decimal:2',
+        'selling_price' => 'decimal:2',
         'discount_percent' => 'integer',
         'quota_bonus_percent' => 'integer',
         'is_visible' => 'boolean',
@@ -152,7 +156,7 @@ class PlanTerm extends Model
     }
 
     /**
-     * Insert any missing billing_key rows for a paid plan from {@see Plan::price} / {@see Plan::discount_percent}.
+     * Insert any missing billing_key rows for a paid plan from {@see Plan::price} / {@see Plan::selling_price}.
      * Does not change or delete existing {@see PlanTerm} rows.
      */
     public static function fillMissingTermsForPlan(Plan $plan): void
@@ -161,16 +165,16 @@ class PlanTerm extends Model
             return;
         }
 
-        $monthly = (float) $plan->price;
-        $disc = $plan->discount_percent;
+        $monthly = PlanPricing::normalizeMoney($plan->price);
+        $monthlySell = PlanPricing::normalizeMoney($plan->selling_price ?? $plan->final_price);
         $defs = [
-            [self::BILLING_MONTHLY, 30, $monthly, $disc, true, self::defaultQuotaBonusPercentFor(self::BILLING_MONTHLY)],
-            [self::BILLING_QUARTERLY, 90, round($monthly * 3 * 0.95), null, false, self::defaultQuotaBonusPercentFor(self::BILLING_QUARTERLY)],
-            [self::BILLING_HALF_YEARLY, 180, round($monthly * 6 * 0.90), null, false, self::defaultQuotaBonusPercentFor(self::BILLING_HALF_YEARLY)],
-            [self::BILLING_YEARLY, 365, round($monthly * 12 * 0.85), null, false, self::defaultQuotaBonusPercentFor(self::BILLING_YEARLY)],
+            [self::BILLING_MONTHLY, 30, $monthly, $monthlySell, true, self::defaultQuotaBonusPercentFor(self::BILLING_MONTHLY)],
+            [self::BILLING_QUARTERLY, 90, round($monthly * 3 * 0.95, 2), round($monthlySell * 3 * 0.95, 2), false, self::defaultQuotaBonusPercentFor(self::BILLING_QUARTERLY)],
+            [self::BILLING_HALF_YEARLY, 180, round($monthly * 6 * 0.90, 2), round($monthlySell * 6 * 0.90, 2), false, self::defaultQuotaBonusPercentFor(self::BILLING_HALF_YEARLY)],
+            [self::BILLING_YEARLY, 365, round($monthly * 12 * 0.85, 2), round($monthlySell * 12 * 0.85, 2), false, self::defaultQuotaBonusPercentFor(self::BILLING_YEARLY)],
         ];
 
-        foreach ($defs as [$key, $days, $price, $dPct, $visible, $quotaBonus]) {
+        foreach ($defs as [$key, $days, $price, $selling, $visible, $quotaBonus]) {
             $exists = static::query()
                 ->where('plan_id', $plan->id)
                 ->where('billing_key', $key)
@@ -179,12 +183,14 @@ class PlanTerm extends Model
                 continue;
             }
 
+            $selling = min($selling, $price);
             static::query()->create([
                 'plan_id' => $plan->id,
                 'billing_key' => $key,
                 'duration_days' => $days,
                 'price' => $price,
-                'discount_percent' => $dPct,
+                'selling_price' => $selling,
+                'discount_percent' => PlanPricing::deprecatedDiscountColumnValue($price, $selling),
                 'quota_bonus_percent' => $quotaBonus,
                 'is_visible' => $visible,
                 'sort_order' => static::defaultSortOrder($key),
@@ -204,21 +210,23 @@ class PlanTerm extends Model
             return;
         }
 
-        $monthly = (float) $plan->price;
-        $disc = $plan->discount_percent;
+        $monthly = PlanPricing::normalizeMoney($plan->price);
+        $monthlySell = PlanPricing::normalizeMoney($plan->selling_price ?? $plan->final_price);
         $defs = [
-            [self::BILLING_MONTHLY, 30, $monthly, $disc, true, self::defaultQuotaBonusPercentFor(self::BILLING_MONTHLY)],
-            [self::BILLING_QUARTERLY, 90, round($monthly * 3 * 0.95), null, false, self::defaultQuotaBonusPercentFor(self::BILLING_QUARTERLY)],
-            [self::BILLING_HALF_YEARLY, 180, round($monthly * 6 * 0.90), null, false, self::defaultQuotaBonusPercentFor(self::BILLING_HALF_YEARLY)],
-            [self::BILLING_YEARLY, 365, round($monthly * 12 * 0.85), null, false, self::defaultQuotaBonusPercentFor(self::BILLING_YEARLY)],
+            [self::BILLING_MONTHLY, 30, $monthly, $monthlySell, true, self::defaultQuotaBonusPercentFor(self::BILLING_MONTHLY)],
+            [self::BILLING_QUARTERLY, 90, round($monthly * 3 * 0.95, 2), round($monthlySell * 3 * 0.95, 2), false, self::defaultQuotaBonusPercentFor(self::BILLING_QUARTERLY)],
+            [self::BILLING_HALF_YEARLY, 180, round($monthly * 6 * 0.90, 2), round($monthlySell * 6 * 0.90, 2), false, self::defaultQuotaBonusPercentFor(self::BILLING_HALF_YEARLY)],
+            [self::BILLING_YEARLY, 365, round($monthly * 12 * 0.85, 2), round($monthlySell * 12 * 0.85, 2), false, self::defaultQuotaBonusPercentFor(self::BILLING_YEARLY)],
         ];
-        foreach ($defs as [$key, $days, $price, $dPct, $visible, $quotaBonus]) {
+        foreach ($defs as [$key, $days, $price, $selling, $visible, $quotaBonus]) {
+            $selling = min($selling, $price);
             static::query()->updateOrCreate(
                 ['plan_id' => $plan->id, 'billing_key' => $key],
                 [
                     'duration_days' => $days,
                     'price' => $price,
-                    'discount_percent' => $dPct,
+                    'selling_price' => $selling,
+                    'discount_percent' => PlanPricing::deprecatedDiscountColumnValue($price, $selling),
                     'quota_bonus_percent' => $quotaBonus,
                     'is_visible' => $visible,
                     'sort_order' => static::defaultSortOrder($key),
@@ -231,7 +239,7 @@ class PlanTerm extends Model
     /**
      * Replace all {@see PlanTerm} rows for a plan: delete existing rows, then insert request order (deterministic).
      *
-     * @param  list<array{billing_key: string, price: float|int|string, discount_percent?: mixed, quota_bonus_percent?: mixed, is_visible?: bool}>  $rows
+     * @param  list<array{billing_key: string, price: float|int|string, selling_price: float|int|string, quota_bonus_percent?: mixed, is_visible?: bool}>  $rows
      */
     public static function syncAdminTermRows(Plan $plan, array $rows): void
     {
@@ -263,11 +271,13 @@ class PlanTerm extends Model
             }
             $insertedKeys[$key] = true;
 
-            $price = (float) ($row['price'] ?? 0);
-            $rawD = $row['discount_percent'] ?? null;
-            $disc = ($rawD === '' || $rawD === null)
-                ? null
-                : max(0, min(100, (int) round((float) $rawD)));
+            $price = PlanPricing::normalizeMoney($row['price'] ?? 0);
+            $selling = array_key_exists('selling_price', $row)
+                ? PlanPricing::normalizeMoney($row['selling_price'])
+                : $price;
+            if ($selling > $price) {
+                $selling = $price;
+            }
             $rawQuotaBonus = $row['quota_bonus_percent'] ?? null;
             $quotaBonus = ($rawQuotaBonus === '' || $rawQuotaBonus === null)
                 ? self::defaultQuotaBonusPercentFor($key)
@@ -279,8 +289,9 @@ class PlanTerm extends Model
                 'plan_id' => $plan->id,
                 'billing_key' => $key,
                 'duration_days' => self::durationDaysFor($key),
-                'price' => max(0, $price),
-                'discount_percent' => $disc,
+                'price' => $price,
+                'selling_price' => $selling,
+                'discount_percent' => PlanPricing::deprecatedDiscountColumnValue($price, $selling),
                 'quota_bonus_percent' => $quotaBonus,
                 'is_visible' => $visible,
                 'sort_order' => ((int) $index + 1) * 10,
@@ -294,9 +305,18 @@ class PlanTerm extends Model
         return $this->belongsTo(Plan::class);
     }
 
+    /**
+     * Payable amount (alias of {@see $selling_price} for checkout / API BC).
+     */
     public function getFinalPriceAttribute(): float
     {
-        $base = (float) $this->price;
+        $raw = $this->attributes['selling_price'] ?? null;
+        if ($raw !== null && $raw !== '') {
+            return PlanPricing::normalizeMoney($raw);
+        }
+
+        // Pre-migration / incomplete row fallback (deprecated formula).
+        $base = PlanPricing::normalizeMoney($this->price);
         $d = (int) ($this->discount_percent ?? 0);
         if ($this->discount_percent && $d > 0) {
             $d = min(100, max(0, $d));
@@ -304,6 +324,16 @@ class PlanTerm extends Model
             return round($base * (1 - ($d / 100)), 2);
         }
 
-        return round($base, 2);
+        return $base;
+    }
+
+    public function displayDiscountPercent(): int
+    {
+        return PlanPricing::displayDiscountPercent($this->price, $this->final_price);
+    }
+
+    public function hasActiveDiscount(): bool
+    {
+        return PlanPricing::hasDisplayDiscount($this->price, $this->final_price);
     }
 }

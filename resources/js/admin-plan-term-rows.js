@@ -1,5 +1,6 @@
 /**
  * Paid plan billing rows: clone template + reindex term_rows[n][*]; radio default_billing_key synced with selects.
+ * Live discount % preview from MRP + Selling Price (display only).
  */
 
 function syncDefaultRadioFromSelect(row) {
@@ -9,6 +10,40 @@ function syncDefaultRadioFromSelect(row) {
         return;
     }
     radio.value = sel.value;
+}
+
+function displayDiscountPercent(mrp, selling) {
+    const m = Number(mrp);
+    const s = Number(selling);
+    if (!Number.isFinite(m) || m <= 0 || !Number.isFinite(s) || s >= m) {
+        return 0;
+    }
+    return Math.round(((m - s) / m) * 100);
+}
+
+function refreshDiscountDisplay(row) {
+    const mrpEl = row.querySelector('.js-plan-mrp');
+    const sellEl = row.querySelector('.js-plan-selling');
+    const out = row.querySelector('.js-plan-discount-display');
+    if (!mrpEl || !sellEl || !out) {
+        return;
+    }
+    const pct = displayDiscountPercent(mrpEl.value, sellEl.value);
+    const emptyLabel = out.getAttribute('data-empty-label') || '—';
+    if (pct > 0) {
+        out.textContent = `${pct}% OFF`;
+        sellEl.setCustomValidity('');
+        if (Number(sellEl.value) > Number(mrpEl.value)) {
+            sellEl.setCustomValidity('Selling Price must not exceed MRP');
+        }
+    } else {
+        out.textContent = emptyLabel;
+        if (Number.isFinite(Number(sellEl.value)) && Number.isFinite(Number(mrpEl.value)) && Number(sellEl.value) > Number(mrpEl.value)) {
+            sellEl.setCustomValidity('Selling Price must not exceed MRP');
+        } else {
+            sellEl.setCustomValidity('');
+        }
+    }
 }
 
 export function initAdminPlanTermRows() {
@@ -30,12 +65,23 @@ export function initAdminPlanTermRows() {
         }
     });
 
+    body.addEventListener('input', (e) => {
+        if (!e.target.classList.contains('js-plan-mrp') && !e.target.classList.contains('js-plan-selling')) {
+            return;
+        }
+        const row = e.target.closest('[data-plan-term-row]');
+        if (row) {
+            refreshDiscountDisplay(row);
+        }
+    });
+
     function reindex() {
         body.querySelectorAll('[data-plan-term-row]').forEach((row, i) => {
             row.querySelectorAll('[name]').forEach((el) => {
                 el.name = el.name.replace(/term_rows\[\d+]/, `term_rows[${i}]`);
             });
             syncDefaultRadioFromSelect(row);
+            refreshDiscountDisplay(row);
         });
     }
 
@@ -60,7 +106,10 @@ export function initAdminPlanTermRows() {
         reindex();
     });
 
-    body.querySelectorAll('[data-plan-term-row]').forEach(syncDefaultRadioFromSelect);
+    body.querySelectorAll('[data-plan-term-row]').forEach((row) => {
+        syncDefaultRadioFromSelect(row);
+        refreshDiscountDisplay(row);
+    });
 }
 
 if (document.readyState === 'loading') {

@@ -132,29 +132,13 @@ class PlansController extends Controller
             $visibleTerms = $p->terms->where('is_visible', true);
             if ($visibleTerms->isNotEmpty()) {
                 foreach ($visibleTerms as $t) {
-                    $d = (int) ($t->discount_percent ?? 0);
-                    if ($d > 0) {
-                        $m = max($m, $d);
-                    } else {
-                        $list = (float) $t->price;
-                        $fin = (float) $t->final_price;
-                        if ($list > $fin + 0.004) {
-                            $m = max($m, (int) round(100 * (1 - $fin / $list)));
-                        }
-                    }
+                    $m = max($m, \App\Support\PlanPricing::displayDiscountPercent($t->price, $t->final_price));
                 }
 
                 return $m;
             }
 
-            $m = (int) ($p->discount_percent ?? 0);
-            $list = (float) $p->price;
-            $fin = (float) $p->final_price;
-            if ($m === 0 && $list > $fin + 0.004) {
-                $m = (int) round(100 * (1 - $fin / $list));
-            }
-
-            return $m;
+            return \App\Support\PlanPricing::displayDiscountPercent($p->price, $p->final_price);
         });
 
         $referredCheckoutOffer = $user !== null

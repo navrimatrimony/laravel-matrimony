@@ -44,17 +44,7 @@
     };
 
     $discountPercentForTerm = function (\App\Models\PlanTerm $t): int {
-        $d = (int) ($t->discount_percent ?? 0);
-        if ($d > 0) {
-            return min(100, $d);
-        }
-        $list = (float) $t->price;
-        $final = (float) $t->final_price;
-        if ($list > $final + 0.004) {
-            return (int) round(100 * (1 - $final / $list));
-        }
-
-        return 0;
+        return \App\Support\PlanPricing::displayDiscountPercent($t->price, $t->final_price);
     };
 
     /** Admin {@see \App\Models\Plan::$marketing_badge} keys; labels reuse admin option translations (SSOT with admin form). */
@@ -382,7 +372,7 @@
                                 @php
                                     $listPrice = (float) $plan->price;
                                     $finalPrice = (float) $plan->final_price;
-                                    $legacyDisc = (int) ($plan->discount_percent ?? 0);
+                                    $legacyDisc = \App\Support\PlanPricing::displayDiscountPercent($listPrice, $finalPrice);
                                 @endphp
                                 <div class="mt-4 min-h-[5.5rem] space-y-2">
                                     @if ($legacyDisc > 0)

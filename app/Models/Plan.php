@@ -10,6 +10,7 @@ use App\Services\PlanQuotaUiSource;
 use App\Services\SubscriptionService;
 use App\Support\PlanFeatureKeys;
 use App\Support\PlanFeatureLabel;
+use App\Support\PlanPricing;
 use App\Support\PlanQuotaPolicyKeys;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -41,6 +42,8 @@ class Plan extends Model
         'slug',
         'tier',
         'price',
+        'selling_price',
+        /** @deprecated Display-only legacy column; never use for payable amount. */
         'discount_percent',
         'gst_inclusive',
         'duration_days',
@@ -59,6 +62,7 @@ class Plan extends Model
 
     protected $casts = [
         'price' => 'decimal:2',
+        'selling_price' => 'decimal:2',
         'discount_percent' => 'integer',
         'gst_inclusive' => 'boolean',
         'duration_days' => 'integer',
@@ -172,11 +176,17 @@ class Plan extends Model
     }
 
     /**
-     * Final price after discount_percent (computed only; never stored in DB).
+     * Payable amount (alias of {@see $selling_price} for checkout / API BC).
      */
     public function getFinalPriceAttribute(): float
     {
-        $base = (float) $this->price;
+        $raw = $this->attributes['selling_price'] ?? null;
+        if ($raw !== null && $raw !== '') {
+            return PlanPricing::normalizeMoney($raw);
+        }
+
+        // Pre-migration / incomplete row fallback (deprecated formula).
+        $base = PlanPricing::normalizeMoney($this->price);
         $d = (int) ($this->discount_percent ?? 0);
         if ($this->discount_percent && $d > 0) {
             $d = min(100, max(0, $d));
@@ -184,12 +194,17 @@ class Plan extends Model
             return round($base * (1 - ($d / 100)), 2);
         }
 
-        return round($base, 2);
+        return $base;
+    }
+
+    public function displayDiscountPercent(): int
+    {
+        return PlanPricing::displayDiscountPercent($this->price, $this->final_price);
     }
 
     public function hasActiveDiscount(): bool
     {
-        return ((int) ($this->discount_percent ?? 0)) > 0;
+        return PlanPricing::hasDisplayDiscount($this->price, $this->final_price);
     }
 
     public function featureValue(string $key, ?string $default = null): ?string

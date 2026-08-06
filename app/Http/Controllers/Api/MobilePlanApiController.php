@@ -204,6 +204,9 @@ class MobilePlanApiController extends Controller
         $basePrice = $defaultTerm instanceof PlanTerm ? (float) $defaultTerm->price : (float) $plan->price;
         $finalPrice = $defaultTerm instanceof PlanTerm ? (float) $defaultTerm->final_price : (float) $plan->final_price;
         $durationDays = $defaultTerm instanceof PlanTerm ? (int) $defaultTerm->duration_days : (int) $plan->duration_days;
+        $displayDiscount = $defaultTerm instanceof PlanTerm
+            ? $defaultTerm->displayDiscountPercent()
+            : $plan->displayDiscountPercent();
 
         return [
             'id' => $plan->exists ? (int) $plan->id : null,
@@ -214,10 +217,9 @@ class MobilePlanApiController extends Controller
             'description' => $plan->description,
             'currency' => 'INR',
             'price' => round($basePrice, 2),
+            'selling_price' => round($finalPrice, 2),
             'final_price' => round($finalPrice, 2),
-            'discount_percent' => $defaultTerm instanceof PlanTerm
-                ? (int) ($defaultTerm->discount_percent ?? 0)
-                : (int) ($plan->discount_percent ?? 0),
+            'discount_percent' => $displayDiscount,
             'duration_days' => $durationDays,
             'duration_label' => $this->durationLabel($durationDays),
             'highlight' => (bool) $plan->highlight,
@@ -302,6 +304,8 @@ class MobilePlanApiController extends Controller
 
     private function termPayload(PlanTerm $term): array
     {
+        $selling = round((float) $term->final_price, 2);
+
         return [
             'id' => (int) $term->id,
             'billing_key' => (string) $term->billing_key,
@@ -309,8 +313,9 @@ class MobilePlanApiController extends Controller
             'duration_days' => (int) $term->duration_days,
             'duration_label' => $this->durationLabel((int) $term->duration_days),
             'price' => round((float) $term->price, 2),
-            'final_price' => round((float) $term->final_price, 2),
-            'discount_percent' => (int) ($term->discount_percent ?? 0),
+            'selling_price' => $selling,
+            'final_price' => $selling,
+            'discount_percent' => $term->displayDiscountPercent(),
             'quota_bonus_percent' => (int) ($term->quota_bonus_percent ?? 0),
             'quota_duration_multiplier' => PlanTerm::quotaDurationMultiplierFor(
                 (string) $term->billing_key,

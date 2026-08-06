@@ -43,12 +43,15 @@ class PlanGraceCarryConsistencyTest extends TestCase
     {
         $rows = [];
         foreach ($rowDataByBillingKey as $bk => $over) {
-            $rows[] = array_merge([
+            $row = array_merge([
                 'billing_key' => $bk,
                 'price' => '0',
-                'discount_percent' => '',
                 'is_visible' => '0',
             ], $over);
+            if (! array_key_exists('selling_price', $over)) {
+                $row['selling_price'] = $row['price'];
+            }
+            $rows[] = $row;
         }
 
         return $rows;
@@ -72,6 +75,7 @@ class PlanGraceCarryConsistencyTest extends TestCase
             'billing_key' => PlanTerm::BILLING_MONTHLY,
             'duration_days' => 30,
             'price' => 100.0,
+            'selling_price' => 100.0,
             'discount_percent' => null,
             'is_visible' => true,
             'sort_order' => 10,

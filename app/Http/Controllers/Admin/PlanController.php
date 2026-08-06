@@ -152,9 +152,8 @@ class PlanController extends Controller
     }
 
     /**
-     * Paid-plan form posts list price per {@see PlanTerm} row only; validation still expects plan-level
-     * {@code price} / {@code discount_percent}. Mirror the selected catalog tab row (same logic as
-     * {@see canonicalPaidPricingFromRequest}) before validation.
+     * Paid-plan form posts MRP + selling per {@see PlanTerm} row; validation still expects plan-level
+     * {@code price} / {@code selling_price}. Mirror the selected catalog tab row before validation.
      */
     private function mergePaidPlanPricingFromTermRowsForRequest(Request $request, ?Plan $plan): void
     {
@@ -184,15 +183,13 @@ class PlanController extends Controller
             $selectedRow = $rows[0];
         }
 
-        $price = max(0, (float) ($selectedRow['price'] ?? 0));
-        $rawD = $selectedRow['discount_percent'] ?? null;
-        $disc = ($rawD === '' || $rawD === null)
-            ? null
-            : max(0, min(100, (int) round((float) $rawD)));
+        $price = \App\Support\PlanPricing::normalizeMoney($selectedRow['price'] ?? 0);
+        $selling = \App\Support\PlanPricing::normalizeMoney($selectedRow['selling_price'] ?? $price);
 
         $request->merge([
             'price' => $price,
-            'discount_percent' => $disc,
+            'selling_price' => $selling,
+            'discount_percent' => \App\Support\PlanPricing::deprecatedDiscountColumnValue($price, $selling),
         ]);
     }
 
@@ -309,8 +306,8 @@ class PlanController extends Controller
         $request->validate([
             'term_rows' => ['required', 'array', 'min:1'],
             'term_rows.*.billing_key' => ['required', 'string', Rule::in(PlanTerm::presetBillingKeys())],
-            'term_rows.*.price' => ['required', 'numeric', 'min:0'],
-            'term_rows.*.discount_percent' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'term_rows.*.price' => ['required', 'numeric', 'gt:0'],
+            'term_rows.*.selling_price' => ['required', 'numeric', 'min:0'],
             'term_rows.*.quota_bonus_percent' => ['nullable', 'integer', 'min:0', 'max:100'],
             'term_rows.*.is_visible' => ['nullable'],
             'default_billing_key' => ['required', 'string', Rule::in(PlanTerm::presetBillingKeys())],
@@ -324,6 +321,21 @@ class PlanController extends Controller
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'term_rows' => [__('subscriptions.admin_term_rows_duplicate')],
             ]);
+        }
+
+        $errors = [];
+        foreach ((array) $request->input('term_rows', []) as $i => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $mrp = \App\Support\PlanPricing::normalizeMoney($row['price'] ?? 0);
+            $selling = \App\Support\PlanPricing::normalizeMoney($row['selling_price'] ?? 0);
+            if ($selling > $mrp) {
+                $errors["term_rows.$i.selling_price"] = [__('subscriptions.admin_selling_must_not_exceed_mrp')];
+            }
+        }
+        if ($errors !== []) {
+            throw \Illuminate\Validation\ValidationException::withMessages($errors);
         }
 
         $defaultKey = trim((string) $request->input('default_billing_key', ''));
@@ -346,7 +358,7 @@ class PlanController extends Controller
     }
 
     /**
-     * @return list<array{billing_key: string, price: float, discount_percent: int|null, quota_bonus_percent: int, is_visible: bool}>
+     * @return list<array{billing_key: string, price: float, selling_price: float, quota_bonus_percent: int, is_visible: bool}>
      */
     private function normalizedTermRowsFromRequest(Request $request): array
     {
@@ -359,10 +371,10 @@ class PlanController extends Controller
             if ($key === '') {
                 continue;
             }
-            $rawD = $row['discount_percent'] ?? null;
-            $disc = ($rawD === '' || $rawD === null)
-                ? null
-                : max(0, min(100, (int) round((float) $rawD)));
+            $price = \App\Support\PlanPricing::normalizeMoney($row['price'] ?? 0);
+            $selling = array_key_exists('selling_price', $row)
+                ? \App\Support\PlanPricing::normalizeMoney($row['selling_price'])
+                : $price;
             $rawQuotaBonus = $row['quota_bonus_percent'] ?? null;
             $quotaBonus = ($rawQuotaBonus === '' || $rawQuotaBonus === null)
                 ? PlanTerm::defaultQuotaBonusPercentFor($key)
@@ -372,8 +384,8 @@ class PlanController extends Controller
 
             $out[] = [
                 'billing_key' => $key,
-                'price' => (float) ($row['price'] ?? 0),
-                'discount_percent' => $disc,
+                'price' => $price,
+                'selling_price' => $selling,
                 'quota_bonus_percent' => $quotaBonus,
                 'is_visible' => $visible,
             ];
@@ -392,7 +404,7 @@ class PlanController extends Controller
             ->mapWithKeys(fn (array $row) => [
                 (string) ($row['billing_key'] ?? '') => [
                     'price' => round((float) ($row['price'] ?? 0), 2),
-                    'discount_percent' => $row['discount_percent'] === null ? null : (int) $row['discount_percent'],
+                    'selling_price' => round((float) ($row['selling_price'] ?? $row['price'] ?? 0), 2),
                     'quota_bonus_percent' => (int) ($row['quota_bonus_percent'] ?? PlanTerm::defaultQuotaBonusPercentFor((string) ($row['billing_key'] ?? ''))),
                     'is_visible' => (bool) ($row['is_visible'] ?? false),
                 ],
@@ -403,7 +415,7 @@ class PlanController extends Controller
             ->mapWithKeys(fn (PlanTerm $term) => [
                 (string) $term->billing_key => [
                     'price' => round((float) $term->price, 2),
-                    'discount_percent' => $term->discount_percent === null ? null : (int) $term->discount_percent,
+                    'selling_price' => round((float) $term->final_price, 2),
                     'quota_bonus_percent' => (int) ($term->quota_bonus_percent ?? 0),
                     'is_visible' => (bool) $term->is_visible,
                 ],
@@ -475,16 +487,30 @@ class PlanController extends Controller
                 : max(0, min(100, (int) round((float) $rawDiscount))),
         ]);
 
+        if ($request->input('selling_price') === '' || $request->input('selling_price') === null) {
+            if ($request->filled('price')) {
+                $request->merge(['selling_price' => $request->input('price')]);
+            }
+        }
+
         $isFreeSystemPlan = ($planContext !== null && Plan::isFreeCatalogSlug((string) $planContext->slug))
             || Plan::isFreeCatalogSlug((string) $request->input('slug', ''));
 
         if ($isFreeSystemPlan && ! $request->filled('price')) {
             $request->merge(['price' => $planContext !== null ? (float) ($planContext->price ?? 0) : 0.0]);
         }
+        if ($isFreeSystemPlan && ! $request->filled('selling_price')) {
+            $request->merge([
+                'selling_price' => $planContext !== null
+                    ? (float) ($planContext->selling_price ?? $planContext->price ?? 0)
+                    : (float) $request->input('price', 0),
+            ]);
+        }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'price' => ['required', 'numeric', 'min:0'],
+            'selling_price' => ['nullable', 'numeric', 'min:0'],
             'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'duration_days' => [$isFreeSystemPlan ? 'required' : 'nullable', 'integer', 'min:0'],
             'grace_period_days' => ['required', 'integer', Rule::in(self::ADMIN_GRACE_PERIOD_DAY_OPTIONS)],
@@ -501,6 +527,12 @@ class PlanController extends Controller
         $canonicalPaidPricing = null;
         if (! $isFreeSystemPlan) {
             $canonicalPaidPricing = $this->canonicalPaidPricingFromRequest($request, $planContext);
+            if ($canonicalPaidPricing !== null
+                && $canonicalPaidPricing['selling_price'] > $canonicalPaidPricing['price']) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'selling_price' => [__('subscriptions.admin_selling_must_not_exceed_mrp')],
+                ]);
+            }
         }
 
         $leftoverRaw = $request->input('leftover_quota_carry_window_days');
@@ -552,6 +584,10 @@ class PlanController extends Controller
             'name' => $validated['name'],
             'slug' => $slug,
             'price' => $canonicalPaidPricing['price'] ?? $validated['price'],
+            'selling_price' => $canonicalPaidPricing['selling_price']
+                ?? (isset($validated['selling_price'])
+                    ? (float) $validated['selling_price']
+                    : (float) ($validated['price'] ?? 0)),
             'discount_percent' => $canonicalPaidPricing['discount_percent'] ?? ($validated['discount_percent'] ?? null),
             'gst_inclusive' => $request->boolean('gst_inclusive'),
             'duration_days' => $durationDays,
@@ -571,7 +607,7 @@ class PlanController extends Controller
     /**
      * Paid-plan monetary SSOT comes from selected duration billing row in term_rows.
      *
-     * @return array{price:float, discount_percent:int|null}|null
+     * @return array{price:float, selling_price:float, discount_percent:int|null}|null
      */
     private function canonicalPaidPricingFromRequest(Request $request, ?Plan $planContext): ?array
     {
@@ -594,13 +630,13 @@ class PlanController extends Controller
             $selectedRow = $rows[0];
         }
 
-        $price = max(0, (float) ($selectedRow['price'] ?? 0));
-        $discRaw = $selectedRow['discount_percent'] ?? null;
-        $disc = ($discRaw === '' || $discRaw === null) ? null : max(0, min(100, (int) $discRaw));
+        $price = \App\Support\PlanPricing::normalizeMoney($selectedRow['price'] ?? 0);
+        $selling = \App\Support\PlanPricing::normalizeMoney($selectedRow['selling_price'] ?? $price);
 
         return [
             'price' => $price,
-            'discount_percent' => $disc,
+            'selling_price' => $selling,
+            'discount_percent' => \App\Support\PlanPricing::deprecatedDiscountColumnValue($price, $selling),
         ];
     }
 
@@ -1080,7 +1116,7 @@ class PlanController extends Controller
     /**
      * Billing rows for admin form: edit loads only persisted {@see Plan::$terms}; create uses one starter row.
      *
-     * @return list<array{billing_key: string, price: float, discount_percent: int|null, quota_bonus_percent: int, is_visible: bool}>
+     * @return list<array{billing_key: string, price: float, selling_price: float, quota_bonus_percent: int, is_visible: bool}>
      */
     private function termRowsForAdminBillingForm(Plan $plan, bool $isEdit): array
     {
@@ -1094,19 +1130,19 @@ class PlanController extends Controller
             return $plan->terms->sortBy('sort_order')->values()->map(fn (PlanTerm $t) => [
                 'billing_key' => $t->billing_key,
                 'price' => (float) $t->price,
-                'discount_percent' => $t->discount_percent,
+                'selling_price' => (float) $t->final_price,
                 'quota_bonus_percent' => (int) ($t->quota_bonus_percent ?? 0),
                 'is_visible' => (bool) $t->is_visible,
             ])->all();
         }
 
         $p = (float) ($plan->price ?? 0);
-        $d = $plan->discount_percent;
+        $s = (float) ($plan->selling_price ?? $plan->final_price ?? $p);
 
         return [[
             'billing_key' => PlanTerm::BILLING_MONTHLY,
             'price' => $p,
-            'discount_percent' => $d !== null ? (int) $d : null,
+            'selling_price' => $s,
             'quota_bonus_percent' => PlanTerm::defaultQuotaBonusPercentFor(PlanTerm::BILLING_MONTHLY),
             'is_visible' => true,
         ]];

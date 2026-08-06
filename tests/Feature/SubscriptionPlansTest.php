@@ -46,6 +46,7 @@ class SubscriptionPlansTest extends TestCase
             'name' => 'Ribbon Test Plan',
             'slug' => 'ribbon-test-plan',
             'price' => 99,
+            'selling_price' => 99,
             'discount_percent' => 0,
             'duration_days' => 30,
             'is_active' => true,
@@ -64,6 +65,7 @@ class SubscriptionPlansTest extends TestCase
             'duration_days' => 30,
             'price' => 99,
             'discount_percent' => 0,
+            'selling_price' => 99,
             'is_visible' => true,
             'sort_order' => PlanTerm::defaultSortOrder(PlanTerm::BILLING_MONTHLY),
         ]);

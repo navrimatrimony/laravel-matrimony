@@ -44,12 +44,15 @@ class PlanUpdateBillingRequestTest extends TestCase
     {
         $rows = [];
         foreach ($rowDataByBillingKey as $bk => $over) {
-            $rows[] = array_merge([
+            $row = array_merge([
                 'billing_key' => $bk,
                 'price' => '0',
-                'discount_percent' => '',
                 'is_visible' => '0',
             ], $over);
+            if (! array_key_exists('selling_price', $over)) {
+                $row['selling_price'] = $row['price'];
+            }
+            $rows[] = $row;
         }
 
         return $rows;
@@ -71,6 +74,7 @@ class PlanUpdateBillingRequestTest extends TestCase
             'billing_key' => PlanTerm::BILLING_MONTHLY,
             'duration_days' => 30,
             'price' => 100.0,
+            'selling_price' => 100.0,
             'discount_percent' => null,
             'is_visible' => true,
             'sort_order' => 10,
@@ -100,10 +104,12 @@ class PlanUpdateBillingRequestTest extends TestCase
 
         $plan->refresh();
         $this->assertSame(99.0, (float) $plan->price);
+        $this->assertSame(99.0, (float) $plan->selling_price);
 
         $term = PlanTerm::query()->where('plan_id', $plan->id)->where('billing_key', PlanTerm::BILLING_MONTHLY)->first();
         $this->assertNotNull($term);
         $this->assertSame(99.0, (float) $term->price);
+        $this->assertSame(99.0, (float) $term->final_price);
     }
 
     public function test_update_plan_persists_multiple_term_rows_without_top_level_price(): void
@@ -122,6 +128,7 @@ class PlanUpdateBillingRequestTest extends TestCase
             'billing_key' => PlanTerm::BILLING_MONTHLY,
             'duration_days' => 30,
             'price' => 100.0,
+            'selling_price' => 100.0,
             'discount_percent' => null,
             'is_visible' => true,
             'sort_order' => 10,
@@ -140,7 +147,7 @@ class PlanUpdateBillingRequestTest extends TestCase
             'quota_policies' => $this->quotaPoliciesPayload(),
             'term_rows' => $this->termRowsList([
                 PlanTerm::BILLING_MONTHLY => ['price' => '100', 'is_visible' => '1'],
-                PlanTerm::BILLING_QUARTERLY => ['price' => '2', 'discount_percent' => '50', 'quota_bonus_percent' => '5', 'is_visible' => '1'],
+                PlanTerm::BILLING_QUARTERLY => ['price' => '2', 'selling_price' => '1', 'quota_bonus_percent' => '5', 'is_visible' => '1'],
             ]),
         ];
 
@@ -151,12 +158,14 @@ class PlanUpdateBillingRequestTest extends TestCase
 
         $plan->refresh();
         $this->assertSame(2.0, (float) $plan->price);
+        $this->assertSame(1.0, (float) $plan->selling_price);
         $this->assertSame(50, (int) $plan->discount_percent);
 
         $q = PlanTerm::query()->where('plan_id', $plan->id)->where('billing_key', PlanTerm::BILLING_QUARTERLY)->first();
         $this->assertNotNull($q);
         $this->assertSame(2.0, (float) $q->price);
-        $this->assertSame(50, (int) $q->discount_percent);
+        $this->assertSame(1.0, (float) $q->final_price);
+        $this->assertSame(50, (int) $q->displayDiscountPercent());
         $this->assertSame(5, (int) $q->quota_bonus_percent);
     }
 
@@ -176,6 +185,7 @@ class PlanUpdateBillingRequestTest extends TestCase
             'billing_key' => PlanTerm::BILLING_MONTHLY,
             'duration_days' => 30,
             'price' => 100.0,
+            'selling_price' => 100.0,
             'discount_percent' => null,
             'is_visible' => true,
             'sort_order' => 10,

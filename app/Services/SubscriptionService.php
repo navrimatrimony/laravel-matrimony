@@ -206,7 +206,9 @@ class SubscriptionService
                         'billing_key' => (string) $planTerm->billing_key,
                         'plan_term_id' => (int) $planTerm->id,
                         'duration_days' => (int) $planTerm->duration_days,
-                        'discount_percent' => $planTerm->discount_percent !== null ? (int) $planTerm->discount_percent : null,
+                        'mrp' => round((float) $planTerm->price, 2),
+                        'selling_price' => round((float) $planTerm->final_price, 2),
+                        'discount_percent' => $planTerm->displayDiscountPercent() ?: null,
                         'quota_bonus_percent' => (int) ($planTerm->quota_bonus_percent ?? 0),
                         'quota_duration_multiplier' => PlanTerm::quotaDurationMultiplierFor(
                             (string) $planTerm->billing_key,
@@ -474,7 +476,11 @@ class SubscriptionService
             'extra_duration_days' => $extraDays,
             'referral_extra_duration_days' => $referralExtra,
             'duration_days_total' => $durationTotal,
-            'discount_percent' => $term?->discount_percent,
+            'discount_percent' => $term instanceof PlanTerm ? ($term->displayDiscountPercent() ?: null) : null,
+            'mrp' => $term instanceof PlanTerm ? round((float) $term->price, 2) : round((float) $plan->price, 2),
+            'selling_price' => $term instanceof PlanTerm
+                ? round((float) $term->final_price, 2)
+                : round((float) $plan->final_price, 2),
             'quota_bonus_percent' => (int) ($term?->quota_bonus_percent ?? 0),
             'quota_duration_multiplier' => $term instanceof PlanTerm
                 ? PlanTerm::quotaDurationMultiplierFor((string) $term->billing_key, (int) $term->duration_days)

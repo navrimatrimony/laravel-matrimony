@@ -239,7 +239,7 @@
                         'row' => [
                             'billing_key' => \App\Models\PlanTerm::BILLING_MONTHLY,
                             'price' => 0,
-                            'discount_percent' => null,
+                            'selling_price' => 0,
                             'quota_bonus_percent' => \App\Models\PlanTerm::defaultQuotaBonusPercentFor(\App\Models\PlanTerm::BILLING_MONTHLY),
                             'is_visible' => true,
                         ],

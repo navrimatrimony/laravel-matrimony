@@ -51,12 +51,15 @@ class PlanMultiDurationStoreTest extends TestCase
     {
         $rows = [];
         foreach ($rowDataByBillingKey as $bk => $over) {
-            $rows[] = array_merge([
+            $row = array_merge([
                 'billing_key' => $bk,
                 'price' => '0',
-                'discount_percent' => '',
                 'is_visible' => '0',
             ], $over);
+            if (! array_key_exists('selling_price', $over)) {
+                $row['selling_price'] = $row['price'];
+            }
+            $rows[] = $row;
         }
 
         return $rows;
@@ -165,7 +168,7 @@ class PlanMultiDurationStoreTest extends TestCase
             'quota_policies' => $this->quotaPoliciesPayload(),
             'term_rows' => $this->termRowsList([
                 PlanTerm::BILLING_MONTHLY => ['price' => '100', 'is_visible' => '1'],
-                PlanTerm::BILLING_QUARTERLY => ['price' => '270', 'discount_percent' => '5', 'quota_bonus_percent' => '5', 'is_visible' => '1'],
+                PlanTerm::BILLING_QUARTERLY => ['price' => '270', 'selling_price' => '256.5', 'quota_bonus_percent' => '5', 'is_visible' => '1'],
             ]),
         ];
 

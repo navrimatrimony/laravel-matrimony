@@ -1,10 +1,15 @@
 @php
+    use App\Support\PlanPricing;
+
     $forTemplate = $forTemplate ?? false;
     $bk = (string) ($row['billing_key'] ?? \App\Models\PlanTerm::BILLING_MONTHLY);
     $priceOld = old('term_rows.'.$i.'.price');
     $priceShow = $priceOld !== null && $priceOld !== '' ? $priceOld : ($row['price'] ?? 0);
-    $discOld = old('term_rows.'.$i.'.discount_percent');
-    $discShow = $discOld !== null && $discOld !== '' ? $discOld : ($row['discount_percent'] ?? '');
+    $sellingOld = old('term_rows.'.$i.'.selling_price');
+    $sellingShow = $sellingOld !== null && $sellingOld !== ''
+        ? $sellingOld
+        : ($row['selling_price'] ?? $priceShow);
+    $discShow = PlanPricing::displayDiscountPercent($priceShow, $sellingShow);
     $quotaBonusOld = old('term_rows.'.$i.'.quota_bonus_percent');
     $quotaBonusShow = $quotaBonusOld !== null && $quotaBonusOld !== '' ? $quotaBonusOld : ($row['quota_bonus_percent'] ?? 0);
     $visOld = old('term_rows.'.$i.'.is_visible');
@@ -29,16 +34,29 @@
         @endif
     </div>
     <div class="sm:col-span-2">
-        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{{ __('subscriptions.admin_plan_catalog_price_label') }}</label>
-        <input type="number" name="term_rows[{{ $i }}][price]" min="0" step="0.01" required
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{{ __('subscriptions.admin_plan_mrp_label') }}</label>
+        <input type="number" name="term_rows[{{ $i }}][price]" min="0.01" step="0.01" required
             value="{{ $priceShow }}"
-            class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
+            data-plan-mrp
+            class="js-plan-mrp w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
     </div>
     <div class="sm:col-span-2">
-        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{{ __('subscriptions.admin_plan_discount_percent_label') }}</label>
-        <input type="number" name="term_rows[{{ $i }}][discount_percent]" min="0" max="100" step="1" placeholder="—"
-            value="{{ $discShow }}"
-            class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{{ __('subscriptions.admin_plan_selling_price_label') }}</label>
+        <input type="number" name="term_rows[{{ $i }}][selling_price]" min="0" step="0.01" required
+            value="{{ $sellingShow }}"
+            data-plan-selling
+            class="js-plan-selling w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
+    </div>
+    <div class="sm:col-span-2">
+        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{{ __('subscriptions.admin_plan_discount_display_label') }}</label>
+        <div class="js-plan-discount-display flex h-[38px] items-center rounded-md border border-gray-200 bg-gray-50 px-3 text-sm font-semibold tabular-nums text-gray-800 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+            data-empty-label="—">
+            @if ($discShow > 0)
+                {{ __('subscriptions.discount_badge', ['percent' => $discShow]) }}
+            @else
+                —
+            @endif
+        </div>
     </div>
     <div class="sm:col-span-2">
         <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{{ __('subscriptions.admin_plan_quota_bonus_percent_label') }}</label>
@@ -46,7 +64,7 @@
             value="{{ $quotaBonusShow }}"
             class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
     </div>
-    <div class="sm:col-span-2 flex items-end pb-0.5">
+    <div class="sm:col-span-1 flex items-end pb-0.5">
         <label class="inline-flex items-center gap-2 cursor-pointer text-xs text-gray-700 dark:text-gray-300">
             <input type="radio" name="default_billing_key" class="js-plan-default-radio rounded-full border-gray-300 text-indigo-600 focus:ring-indigo-500" value="{{ $bk }}" @checked($defaultRadioChecked) />
             <span>{{ __('subscriptions.admin_billing_default_catalog_tab') }}</span>
@@ -59,7 +77,7 @@
             <span>{{ __('subscriptions.admin_billing_show_public') }}</span>
         </label>
     </div>
-    <div class="sm:col-span-1 flex items-end justify-end pb-1">
+    <div class="sm:col-span-12 flex items-end justify-end pb-1">
         <button type="button" data-plan-term-row-remove class="text-xs font-semibold text-red-600 hover:underline">{{ __('subscriptions.admin_remove_billing_period') }}</button>
     </div>
 </div>

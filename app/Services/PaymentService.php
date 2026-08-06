@@ -170,7 +170,15 @@ class PaymentService
             'duration_days' => $durationDays,
             'extra_duration_days' => 0,
             'duration_days_total' => $durationDays,
-            'discount_percent' => $term?->discount_percent,
+            'discount_percent' => $term instanceof \App\Models\PlanTerm
+                ? ($term->displayDiscountPercent() ?: null)
+                : null,
+            'mrp' => $term instanceof \App\Models\PlanTerm
+                ? round((float) $term->price, 2)
+                : round((float) $plan->price, 2),
+            'selling_price' => $term instanceof \App\Models\PlanTerm
+                ? round((float) $term->final_price, 2)
+                : round((float) $plan->final_price, 2),
             'base_amount' => round($baseAmount, 2),
             'final_amount' => round($finalAmount, 2),
             'currency' => (string) ($payment->currency ?: 'INR'),
