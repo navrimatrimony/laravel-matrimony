@@ -33,6 +33,9 @@ class Plan extends Model
         SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES,
         'chat_images',
         'whatsapp_button',
+        // Legacy plan_features leftovers (not admin quota cards); still gate runtime export entitlement.
+        PlanFeatureKeys::BIODATA_EXPORT_LIMIT,
+        PlanFeatureKeys::BIODATA_PREMIUM_TEMPLATES,
     ];
 
     protected $fillable = [

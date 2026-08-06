@@ -77,6 +77,8 @@
         'photo_full_access',
         'whatsapp_button',
         'profile_whatsapp_direct',
+        'biodata_export_limit',
+        'biodata_premium_templates',
     ];
     $intFieldClass = 'w-full max-w-[5.5rem] rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-900 dark:text-white text-sm font-semibold tabular-nums py-2 px-2.5';
 @endphp
