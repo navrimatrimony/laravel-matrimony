@@ -10,25 +10,24 @@ use App\Models\UserEntitlement;
 use App\Support\PlanFeatureKeys;
 use App\Support\PlanQuotaPolicyKeys;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class EntitlementService
 {
-    /**
-     * @var array<int, Plan|null> Resolved active plan (with features) per user for this request/instance.
-     */
-    private array $activePlanWithFeaturesByUser = [];
-
     /**
      * @var array<int, array<string, string>>
      */
     private array $quotaMirroredPlanFeatureValuesByUserId = [];
 
     /**
-     * Assign entitlements when subscription starts
+     * Assign entitlements when subscription starts.
+     * Key set from frozen checkout_snapshot (quota_policies mirror + features map).
+     * Live {@see Plan::$features} only when snapshot.features is absent on a free-catalog contract
+     * (or purchase-time path that has not yet frozen features — rare; new purchases write features first).
      */
     public function assignFromSubscription(Subscription $subscription): void
     {
-        $plan = $subscription->plan()->with('features')->first();
+        $plan = $subscription->plan()->first();
 
         if (! $plan) {
             return;
@@ -58,21 +57,50 @@ class EntitlementService
             );
         }
 
-        foreach ($plan->features as $feature) {
-            if (isset($writtenByQuota[$feature->key])) {
-                continue;
+        $snap = $subscription->checkoutSnapshot();
+        $featureMap = $snap['features'] ?? null;
+        if (is_array($featureMap)) {
+            foreach ($featureMap as $key => $_value) {
+                $key = trim((string) $key);
+                if ($key === '' || isset($writtenByQuota[$key])) {
+                    continue;
+                }
+                UserEntitlement::updateOrCreate(
+                    [
+                        'user_id' => $subscription->user_id,
+                        'entitlement_key' => $key,
+                    ],
+                    [
+                        'valid_until' => $validUntil,
+                        'value_override' => null,
+                        'revoked_at' => null,
+                    ]
+                );
             }
-            UserEntitlement::updateOrCreate(
-                [
-                    'user_id' => $subscription->user_id,
-                    'entitlement_key' => $feature->key,
-                ],
-                [
-                    'valid_until' => $validUntil,
-                    'value_override' => null,
-                    'revoked_at' => null,
-                ]
-            );
+        } elseif (Plan::isFreeCatalogSlug((string) $plan->slug)) {
+            $plan->loadMissing('features');
+            foreach ($plan->features as $feature) {
+                if (isset($writtenByQuota[$feature->key])) {
+                    continue;
+                }
+                UserEntitlement::updateOrCreate(
+                    [
+                        'user_id' => $subscription->user_id,
+                        'entitlement_key' => $feature->key,
+                    ],
+                    [
+                        'valid_until' => $validUntil,
+                        'value_override' => null,
+                        'revoked_at' => null,
+                    ]
+                );
+            }
+        } else {
+            Log::warning('subscription_assign_entitlements_missing_snapshot_features', [
+                'subscription_id' => (int) $subscription->id,
+                'user_id' => (int) $subscription->user_id,
+                'fallback' => null,
+            ]);
         }
 
         unset($this->quotaMirroredPlanFeatureValuesByUserId[(int) $subscription->user_id]);
@@ -105,8 +133,10 @@ class EntitlementService
     }
 
     /**
-     * Feature value from the active subscription's plan (PlanFeature), gated by a valid entitlement row.
-     * UserEntitlement does not store the value; it only authorizes reading the plan row.
+     * Feature value gated by a valid entitlement row.
+     * Quota keys → {@see PlanQuotaUiSource} (checkout_snapshot.quota_policies for paid; live catalog for free).
+     * Non-quota keys → {@see PlanFeatureContractSource} (checkout_snapshot.features or live catalog).
+     * UserEntitlement does not store the value (except {@see UserEntitlement::value_override}); it authorizes access.
      *
      * @return string|mixed|null
      */
@@ -122,11 +152,6 @@ class EntitlementService
             return $override;
         }
 
-        $plan = $this->resolveActivePlanWithFeatures($userId);
-        if (! $plan) {
-            return $default;
-        }
-
         $normalized = app(FeatureUsageService::class)->normalizeFeatureKey($key);
         $quotaMap = $this->mirroredPlanFeatureValuesFromQuota($userId);
         if (array_key_exists($normalized, $quotaMap)) {
@@ -139,7 +164,12 @@ class EntitlementService
             );
         }
 
-        $value = $plan->featureValue($normalized);
+        $user = User::query()->find($userId);
+        if (! $user) {
+            return $default;
+        }
+
+        $value = PlanFeatureContractSource::valueForUser($user, $normalized);
         if ($value === null || $value === '') {
             return $default;
         }
@@ -240,28 +270,6 @@ class EntitlementService
     private function findValidEntitlement(int $userId, string $key): ?UserEntitlement
     {
         return $this->validEntitlementsQuery($userId, $key)->first();
-    }
-
-    private function resolveActivePlanWithFeatures(int $userId): ?Plan
-    {
-        if (array_key_exists($userId, $this->activePlanWithFeaturesByUser)) {
-            return $this->activePlanWithFeaturesByUser[$userId];
-        }
-
-        $user = User::query()->find($userId);
-        $sub = $user ? app(ActivePlanResolver::class)->getActiveSubscription($user) : null;
-        if ($sub) {
-            $sub->loadMissing(['plan.features', 'plan.quotaPolicies']);
-        }
-
-        $plan = $sub?->plan;
-        if ($plan) {
-            $plan->loadMissing(['features', 'quotaPolicies']);
-        }
-
-        $this->activePlanWithFeaturesByUser[$userId] = $plan;
-
-        return $plan;
     }
 
     /**

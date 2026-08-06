@@ -10,12 +10,19 @@ use App\Models\User;
 use App\Support\PlanFeatureKeys;
 use App\Support\PlanQuotaPolicyKeys;
 use App\Support\PlanQuotaRefreshRuntime;
+use Illuminate\Support\Facades\Log;
 
 /**
- * SSOT: quota payloads only from {@code subscription.meta.checkout_snapshot.quota_policies} or {@see Plan::$quotaPolicies}.
+ * SSOT: existing paid subscription → {@code checkout_snapshot.quota_policies} only (fail closed).
+ * Free tier / no subscription / catalog display → {@see Plan::$quotaPolicies}.
  */
 final class PlanQuotaUiSource
 {
+    /**
+     * @var array<string, true>
+     */
+    private static array $loggedMissingQuotaContract = [];
+
     /**
      * Ensures structural {@code policy_meta} keys exist so mirror strings never depend on legacy {@code plan_features}.
      * In-memory only (does not persist).
@@ -59,13 +66,14 @@ final class PlanQuotaUiSource
     {
         $sub = app(ActivePlanResolver::class)->getActiveSubscription($user);
 
-        if ($sub !== null && is_array($sub->meta)) {
-            $snap = $sub->meta['checkout_snapshot'] ?? null;
-            if (is_array($snap) && array_key_exists('quota_policies', $snap) && is_array($snap['quota_policies'])) {
-                $qp = $snap['quota_policies'];
-                self::assertCompleteQuotaPayloads($qp, 'checkout_snapshot.user_id='.$user->id);
+        if ($sub instanceof Subscription) {
+            $fromSnap = self::tryPayloadsFromCheckoutSnapshot($sub, 'user_id='.$user->id);
+            if ($fromSnap !== null) {
+                return $fromSnap;
+            }
 
-                return self::withStructuralPolicyMetaNormalized($qp);
+            if (self::subscriptionIsPaidContract($sub)) {
+                self::failClosedMissingQuotaSnapshot($sub, 'policyPayloadsForUser.user_id='.$user->id);
             }
         }
 
@@ -81,15 +89,19 @@ final class PlanQuotaUiSource
      */
     public static function policyPayloadsForSubscription(Subscription $subscription): array
     {
-        $meta = $subscription->meta;
-        if (is_array($meta)) {
-            $snap = $meta['checkout_snapshot'] ?? null;
-            if (is_array($snap) && array_key_exists('quota_policies', $snap) && is_array($snap['quota_policies'])) {
-                $qp = $snap['quota_policies'];
-                self::assertCompleteQuotaPayloads($qp, 'checkout_snapshot.subscription_id='.(int) $subscription->id);
+        $fromSnap = self::tryPayloadsFromCheckoutSnapshot(
+            $subscription,
+            'subscription_id='.(int) $subscription->id
+        );
+        if ($fromSnap !== null) {
+            return $fromSnap;
+        }
 
-                return self::withStructuralPolicyMetaNormalized($qp);
-            }
+        if (self::subscriptionIsPaidContract($subscription)) {
+            self::failClosedMissingQuotaSnapshot(
+                $subscription,
+                'policyPayloadsForSubscription.subscription_id='.(int) $subscription->id
+            );
         }
 
         $subscription->loadMissing('plan');
@@ -219,5 +231,56 @@ final class PlanQuotaUiSource
         }
 
         return $p;
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>|null Null when snapshot has no usable quota_policies map.
+     */
+    private static function tryPayloadsFromCheckoutSnapshot(Subscription $subscription, string $contextSuffix): ?array
+    {
+        $snap = $subscription->checkoutSnapshot();
+        if (! array_key_exists('quota_policies', $snap) || ! is_array($snap['quota_policies'])) {
+            return null;
+        }
+
+        $qp = $snap['quota_policies'];
+        self::assertCompleteQuotaPayloads($qp, 'checkout_snapshot.'.$contextSuffix);
+
+        return self::withStructuralPolicyMetaNormalized($qp);
+    }
+
+    private static function subscriptionIsPaidContract(Subscription $subscription): bool
+    {
+        $subscription->loadMissing('plan');
+        $plan = $subscription->plan;
+        if (! $plan instanceof Plan) {
+            return true;
+        }
+
+        return ! Plan::isFreeCatalogSlug((string) $plan->slug);
+    }
+
+    /**
+     * Paid members must not silently fall back to live catalog when the frozen contract is missing.
+     *
+     * @return never
+     */
+    private static function failClosedMissingQuotaSnapshot(Subscription $subscription, string $context): void
+    {
+        $logKey = (int) $subscription->id.'|quota_policies_missing';
+        if (! isset(self::$loggedMissingQuotaContract[$logKey])) {
+            self::$loggedMissingQuotaContract[$logKey] = true;
+            Log::warning('subscription_checkout_snapshot_missing_quota_policies', [
+                'subscription_id' => (int) $subscription->id,
+                'user_id' => (int) $subscription->user_id,
+                'context' => $context,
+                'fallback' => null,
+            ]);
+        }
+
+        throw QuotaPolicySourceViolation::incompletePayloads(
+            $context,
+            'paid subscription missing/incomplete checkout_snapshot.quota_policies; run backfill'
+        );
     }
 }

@@ -1097,23 +1097,14 @@ class FeatureUsageService
     }
 
     /**
-     * Incoming chat body/image read access: plan_features.chat_can_read + entitlement when the plan defines the gate;
-     * legacy plans without that row allow reading.
+     * Incoming chat body/image read access: always enforce via frozen quota mirror / entitlement.
+     * Do not probe live {@see Plan::$quotaPolicies} for “gate defined?” (Phase 3.1 leak closure).
      */
     private function canUseChatCanRead(int $userId): bool
     {
         $user = User::query()->find($userId);
         if (! $user) {
             return false;
-        }
-
-        $plan = app(SubscriptionService::class)->getActivePlan($user);
-        $plan->loadMissing('quotaPolicies');
-        $planDefinesReadGate = $plan->quotaPolicies->contains(
-            fn ($p) => (string) $p->feature_key === PlanFeatureKeys::CHAT_CAN_READ
-        );
-        if (! $planDefinesReadGate) {
-            return true;
         }
 
         return app(EntitlementService::class)->hasFeature($userId, PlanFeatureKeys::CHAT_CAN_READ);
@@ -1270,16 +1261,18 @@ class FeatureUsageService
 
     private function whoViewedMePreviewRefreshType(User $user): string
     {
-        $sub = app(SubscriptionService::class)->getActiveSubscription($user);
-        if (! $sub) {
+        try {
+            $payload = PlanQuotaUiSource::requirePolicyPayloadForUser(
+                $user,
+                PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT
+            );
+        } catch (\Throwable) {
             return PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST;
         }
-        $sub->loadMissing('plan.quotaPolicies');
-        $row = $sub->plan?->quotaPolicies?->firstWhere('feature_key', PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT);
-        if (! $row) {
-            return PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST;
-        }
-        $refresh = PlanQuotaPolicy::normalizeRefreshType((string) ($row->refresh_type ?? PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST));
+
+        $refresh = PlanQuotaPolicy::normalizeRefreshType(
+            (string) ($payload['refresh_type'] ?? PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST)
+        );
 
         return in_array($refresh, PlanQuotaPolicy::refreshTypes(), true)
             ? $refresh

@@ -12,7 +12,7 @@ use App\Services\CommunicationPolicyService;
 use App\Services\FeatureUsageService;
 use App\Services\NotificationService;
 use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
-use App\Services\UserEntitlementService;
+use App\Services\SubscriptionService;
 use App\Support\SafeNotifier;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
@@ -102,7 +102,8 @@ class ChatMessageService
             if (! $user) {
                 throw ValidationException::withMessages(['image' => 'Image messages are available for paid users only.']);
             }
-            if (! $user->isAnyAdmin() && ! UserEntitlementService::userHasEntitlement($user, UserEntitlementService::ENTITLEMENT_CHAT_IMAGE_MESSAGES)) {
+            // Phase 3.1: gate on frozen checkout_snapshot.features value, not entitlement row existence alone.
+            if (! $user->isAnyAdmin() && ! app(SubscriptionService::class)->canUseChatImages($user)) {
                 throw ValidationException::withMessages(['image' => 'Image messages are locked for free users.']);
             }
         }

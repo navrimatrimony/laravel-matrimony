@@ -27,8 +27,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * Numeric quotas: {@see PlanQuotaPolicy} at purchase time are frozen in {@see Subscription::checkoutSnapshot()}
- * ({@code quota_policies}); live {@see PlanQuotaPolicy} rows apply for catalog / free tier. Legacy {@see PlanFeature}
- * mirror is not used for those limits.
+ * ({@code quota_policies}); live {@see PlanQuotaPolicy} rows apply for catalog / free tier.
+ * Non-quota PlanFeature values freeze into {@code checkout_snapshot.features} ({@see PlanFeatureContractSource}).
  */
 class SubscriptionService
 {
@@ -967,7 +967,7 @@ class SubscriptionService
     }
 
     /**
-     * Boolean gates for named product features (maps to plan_feature rows).
+     * Boolean gates for named product features (contract for subscribers; catalog for free tier).
      */
     public function hasFeature(User $user, string $feature): bool
     {
@@ -975,16 +975,13 @@ class SubscriptionService
             return true;
         }
 
-        $plan = $this->getEffectivePlan($user);
-        $plan->loadMissing('features');
-
         return match ($feature) {
             'chat' => $this->getFeatureLimit($user, self::FEATURE_CHAT_SEND_LIMIT) !== 0,
             'interest' => app(InterestSendLimitService::class)->effectiveDailyLimit($user) !== 0,
             'profile_views' => $this->getFeatureLimit($user, self::FEATURE_DAILY_PROFILE_VIEW_LIMIT) !== 0,
             'contact_number', 'see_contact' => $this->getFeatureLimit($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT) !== 0,
-            'chat_images' => $this->truthyFeature($plan, self::FEATURE_CHAT_IMAGE_MESSAGES),
-            default => $this->truthyFeature($plan, $feature),
+            'chat_images' => $this->truthyFeature($user, self::FEATURE_CHAT_IMAGE_MESSAGES),
+            default => $this->truthyFeature($user, $feature),
         };
     }
 
@@ -998,9 +995,7 @@ class SubscriptionService
         $normalized = app(FeatureUsageService::class)->normalizeFeatureKey($key);
 
         if (! in_array($normalized, PlanQuotaPolicyKeys::ordered(), true)) {
-            $plan = $this->getEffectivePlan($user);
-            $plan->loadMissing('features');
-            $raw = $plan->featureValue($normalized);
+            $raw = PlanFeatureContractSource::valueForUser($user, $normalized);
             if ($raw === null || $raw === '') {
                 return $this->defaultLimitForKey($normalized);
             }
@@ -1213,12 +1208,15 @@ class SubscriptionService
         return $plan;
     }
 
-    private function truthyFeature(Plan $plan, string $key): bool
+    private function truthyFeature(User $user, string $key): bool
     {
         if (in_array($key, PlanQuotaPolicyKeys::planFeatureKeysWrittenByPolicies(), true)) {
-            $map = PlanQuotaUiSource::mirroredPlanFeatureStringsForPlan($plan, 'truthyFeature');
+            $map = PlanQuotaUiSource::mirroredPlanFeatureStringsForUser($user);
             if (! array_key_exists($key, $map)) {
-                throw QuotaPolicySourceViolation::missingPolicyRow('truthyFeature.plan_id='.(int) $plan->id, $key);
+                throw QuotaPolicySourceViolation::missingPolicyRow(
+                    'truthyFeature.user_id='.(int) $user->id,
+                    $key
+                );
             }
             $v = strtolower(trim($map[$key]));
             if (is_numeric($v)) {
@@ -1228,7 +1226,7 @@ class SubscriptionService
             return in_array($v, ['1', 'true', 'yes', 'on'], true);
         }
 
-        $raw = $plan->featureValue($key);
+        $raw = PlanFeatureContractSource::valueForUser($user, $key);
         $v = strtolower(trim((string) ($raw !== null && $raw !== '' ? $raw : '')));
 
         return in_array($v, ['1', 'true', 'yes', 'on'], true);
@@ -1311,10 +1309,7 @@ class SubscriptionService
             return max(0, min(100, (int) $snap['quota_bonus_percent']));
         }
 
-        $subscription->loadMissing('planTerm');
-        if ($subscription->planTerm instanceof PlanTerm) {
-            return max(0, min(100, (int) ($subscription->planTerm->quota_bonus_percent ?? 0)));
-        }
+        $this->logMissingCheckoutSnapshotQuotaTimingOnce($subscription, 'quota_bonus_percent');
 
         return 0;
     }
@@ -1336,15 +1331,163 @@ class SubscriptionService
             return max(1.0, (float) $snap['quota_duration_multiplier']);
         }
 
-        $subscription->loadMissing('planTerm');
-        if ($subscription->planTerm instanceof PlanTerm) {
-            return PlanTerm::quotaDurationMultiplierFor(
-                (string) $subscription->planTerm->billing_key,
-                (int) $subscription->planTerm->duration_days
-            );
-        }
+        $this->logMissingCheckoutSnapshotQuotaTimingOnce($subscription, 'quota_duration_multiplier');
 
         return 1.0;
+    }
+
+    /**
+     * Phase 3A: fill missing checkout_snapshot quota timing from PlanTerm (backfill / repair only).
+     * Does not create tables or columns — merges into existing meta JSON.
+     *
+     * @return bool True when meta was updated
+     */
+    public function backfillCheckoutSnapshotQuotaTiming(Subscription $subscription): bool
+    {
+        $meta = is_array($subscription->meta) ? $subscription->meta : [];
+        $snap = isset($meta['checkout_snapshot']) && is_array($meta['checkout_snapshot'])
+            ? $meta['checkout_snapshot']
+            : [];
+
+        $needsBonus = ! array_key_exists('quota_bonus_percent', $snap);
+        $needsMult = ! array_key_exists('quota_duration_multiplier', $snap);
+        if (! $needsBonus && ! $needsMult) {
+            return false;
+        }
+
+        $term = $this->resolvePlanTermForQuotaTimingBackfill($subscription, $snap);
+        if ($needsBonus) {
+            $snap['quota_bonus_percent'] = $term instanceof PlanTerm
+                ? max(0, min(100, (int) ($term->quota_bonus_percent ?? 0)))
+                : 0;
+        }
+        if ($needsMult) {
+            $snap['quota_duration_multiplier'] = $term instanceof PlanTerm
+                ? PlanTerm::quotaDurationMultiplierFor((string) $term->billing_key, (int) $term->duration_days)
+                : 1.0;
+        }
+
+        $meta['checkout_snapshot'] = $snap;
+        $subscription->meta = $meta;
+        $subscription->save();
+
+        return true;
+    }
+
+    /**
+     * Phase 3B: fill missing checkout_snapshot.features from current PlanFeature rows (backfill / repair only).
+     *
+     * @return bool True when meta was updated
+     */
+    public function backfillCheckoutSnapshotFeatures(Subscription $subscription): bool
+    {
+        return PlanFeatureContractSource::backfillCheckoutSnapshotFeatures($subscription);
+    }
+
+    /**
+     * Phase 3C: ensure checkout_snapshot.quota_policies.priority_listing exists (backfill / repair only).
+     * JSON only — never invents a second ranking column; ranking reads this contract key.
+     *
+     * @return bool True when meta was updated
+     */
+    public function backfillCheckoutSnapshotPriorityListing(Subscription $subscription): bool
+    {
+        $meta = is_array($subscription->meta) ? $subscription->meta : [];
+        $snap = isset($meta['checkout_snapshot']) && is_array($meta['checkout_snapshot'])
+            ? $meta['checkout_snapshot']
+            : [];
+        $qp = isset($snap['quota_policies']) && is_array($snap['quota_policies'])
+            ? $snap['quota_policies']
+            : [];
+
+        $key = PlanFeatureKeys::PRIORITY_LISTING;
+        if (isset($qp[$key]) && is_array($qp[$key]) && array_key_exists('is_enabled', $qp[$key])) {
+            return false;
+        }
+
+        $subscription->loadMissing('plan.quotaPolicies');
+        $plan = $subscription->plan;
+        if (! $plan instanceof Plan) {
+            return false;
+        }
+
+        if ($qp === []) {
+            $snap['quota_policies'] = PlanQuotaCheckoutSnapshot::forPlan($plan)['quota_policies'];
+        } else {
+            $policy = $plan->quotaPolicies->firstWhere('feature_key', $key);
+            if (! $policy instanceof PlanQuotaPolicy) {
+                return false;
+            }
+            $qp[$key] = PlanQuotaPolicyMirror::payloadFromModel($policy);
+            $snap['quota_policies'] = $qp;
+        }
+
+        $meta['checkout_snapshot'] = $snap;
+        $subscription->meta = $meta;
+        $subscription->save();
+
+        return true;
+    }
+
+    /**
+     * @param  array<string, mixed>  $snap
+     */
+    private function resolvePlanTermForQuotaTimingBackfill(Subscription $subscription, array $snap): ?PlanTerm
+    {
+        $subscription->loadMissing('planTerm');
+        if ($subscription->planTerm instanceof PlanTerm) {
+            return $subscription->planTerm;
+        }
+
+        $tid = (int) ($snap['plan_term_id'] ?? 0);
+        if ($tid > 0) {
+            $term = PlanTerm::query()->find($tid);
+            if ($term instanceof PlanTerm) {
+                return $term;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @var array<string, true>
+     */
+    private static array $loggedMissingCheckoutQuotaTiming = [];
+
+    private function logMissingCheckoutSnapshotQuotaTimingOnce(Subscription $subscription, string $key): void
+    {
+        $logKey = (int) $subscription->id.'|'.$key;
+        if (isset(self::$loggedMissingCheckoutQuotaTiming[$logKey])) {
+            return;
+        }
+        self::$loggedMissingCheckoutQuotaTiming[$logKey] = true;
+        Log::warning('subscription_checkout_snapshot_missing_quota_timing', [
+            'subscription_id' => (int) $subscription->id,
+            'user_id' => (int) $subscription->user_id,
+            'missing_key' => $key,
+            'fallback' => $key === 'quota_bonus_percent' ? 0 : 1.0,
+        ]);
+    }
+
+    /**
+     * @var array<string, true>
+     */
+    private static array $loggedMissingCarryQuotaSnapshot = [];
+
+    private function logMissingCarryQuotaSnapshotOnce(Subscription $subscription, string $featureKey): void
+    {
+        $logKey = (int) $subscription->id.'|'.$featureKey;
+        if (isset(self::$loggedMissingCarryQuotaSnapshot[$logKey])) {
+            return;
+        }
+        self::$loggedMissingCarryQuotaSnapshot[$logKey] = true;
+        Log::warning('subscription_checkout_snapshot_missing_quota_policies_for_carry', [
+            'subscription_id' => (int) $subscription->id,
+            'user_id' => (int) $subscription->user_id,
+            'feature_key' => $featureKey,
+            'fallback' => null,
+        ]);
     }
 
     /**
@@ -1359,7 +1502,7 @@ class SubscriptionService
             ->where('user_id', $user->id)
             ->whereNotNull('ends_at')
             ->orderByDesc('starts_at')
-            ->with(['plan.features', 'plan.quotaPolicies'])
+            ->with(['plan'])
             ->first();
         if (! $previous || ! $previous->plan || ! $this->isWithinGraceOrCarryWindow($previous, $at)) {
             return [];
@@ -1377,10 +1520,11 @@ class SubscriptionService
         $carry = [];
         $previousQuotaBonus = $this->quotaBonusPercentForSubscription($previous);
         $previousQuotaDurationMultiplier = $this->quotaDurationMultiplierForSubscription($previous);
+        $prevSnap = $previous->checkoutSnapshot();
+        $qp = is_array($prevSnap['quota_policies'] ?? null) ? $prevSnap['quota_policies'] : null;
         foreach ($featurePeriods as $featureKey => $period) {
             $limit = 0;
-            $prevSnap = $previous->checkoutSnapshot();
-            $qp = is_array($prevSnap['quota_policies'] ?? null) ? $prevSnap['quota_policies'] : null;
+            // Phase 3.1: previous checkout_snapshot.quota_policies only — never live plan.quotaPolicies.
             if (is_array($qp) && isset($qp[$featureKey]) && is_array($qp[$featureKey])) {
                 $payload = $qp[$featureKey];
                 $limit = PlanQuotaPolicyMirror::subscriptionLimitIntFromQuotaPayload($featureKey, $payload);
@@ -1391,26 +1535,7 @@ class SubscriptionService
                     $previousQuotaDurationMultiplier
                 );
             } else {
-                $previous->plan->loadMissing('quotaPolicies');
-                $row = $previous->plan->quotaPolicies->firstWhere('feature_key', $featureKey);
-                if ($row instanceof PlanQuotaPolicy) {
-                    $payload = PlanQuotaPolicyMirror::payloadFromModel($row);
-                    $limit = PlanQuotaPolicyMirror::subscriptionLimitIntFromQuotaPayload(
-                        $featureKey,
-                        $payload,
-                    );
-                    $limit = $this->effectiveLimitFromQuotaPayload(
-                        $limit,
-                        $payload,
-                        $previousQuotaBonus,
-                        $previousQuotaDurationMultiplier
-                    );
-                } else {
-                    throw QuotaPolicySourceViolation::missingPolicyRow(
-                        'resolveCarryQuotaFromPreviousSubscription.subscription_id='.(int) $previous->id,
-                        $featureKey
-                    );
-                }
+                $this->logMissingCarryQuotaSnapshotOnce($previous, $featureKey);
             }
             if ($limit <= 0) {
                 continue;
