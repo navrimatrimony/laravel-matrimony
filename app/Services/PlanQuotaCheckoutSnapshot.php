@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Models\Plan;
 
 /**
- * Immutable purchase-time copy for {@code subscriptions.meta.checkout_snapshot}:
- * quota payloads + non-quota PlanFeature values ({@see PlanFeatureContractSource}).
+ * Purchase-time freeze writer for {@code subscriptions.meta.checkout_snapshot}
+ * (catalog → subscription contract): complete {@code quota_policies} map plus
+ * non-quota PlanFeature values ({@see PlanFeatureContractSource::featuresMapForPlan}).
+ * Keep intentionally — not dead after Phase 3; paid runtime reads the frozen snap, not live catalog.
  */
 final class PlanQuotaCheckoutSnapshot
 {

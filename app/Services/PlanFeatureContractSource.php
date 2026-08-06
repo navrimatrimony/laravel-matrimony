@@ -9,11 +9,12 @@ use App\Support\PlanQuotaPolicyKeys;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Phase 3B SSOT for non-quota member PlanFeature values:
- * existing subscription → {@code checkout_snapshot.features};
- * no subscription / catalog display → live {@see Plan::$features}.
+ * Phase 3B SSOT for non-quota member PlanFeature values (subscription contract):
+ * paid subscription → {@code checkout_snapshot.features} only;
+ * no subscription / free tier / catalog display → live {@see Plan::$features} (Keep intentionally).
  *
  * Quota-engine keys never live here — use {@see PlanQuotaUiSource}.
+ * Catalog writers ({@see featuresMapForPlan}) and backfills stay; do not treat them as dead code.
  */
 final class PlanFeatureContractSource
 {

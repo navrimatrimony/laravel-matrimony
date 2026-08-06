@@ -7,7 +7,9 @@ use App\Models\PlanQuotaPolicy;
 use App\Models\Subscription;
 
 /**
- * Catalog timing on {@see Plan}; contract timing on {@see Subscription} (Phase 2 Checkpoint B readers).
+ * Phase 2: catalog timing on {@see Plan}; frozen subscription-contract timing on {@see Subscription}.
+ * Plan readers ({@see gracePeriodDays} / {@see leftoverQuotaCarryWindowDays}) are Keep intentionally
+ * for free-tier UI, admin catalog, and purchase-time copy — paid runtime uses *ForSubscription only.
  * Legacy {@see PlanQuotaPolicy::grace_percent_of_plan} is derived from plan for DB compatibility.
  */
 final class PlanSubscriptionTerms
