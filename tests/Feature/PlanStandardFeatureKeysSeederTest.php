@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Plan;
 use App\Models\PlanFeature;
+use App\Models\PlanQuotaPolicy;
 use App\Support\PlanFeatureKeys;
 use Database\Seeders\PlanStandardFeatureKeysSeeder;
 use Database\Seeders\SubscriptionPlansSeeder;
@@ -22,11 +23,11 @@ class PlanStandardFeatureKeysSeederTest extends TestCase
 
         $free = Plan::query()->where('slug', 'free_male')->firstOrFail();
 
-        $this->assertSame('5', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::CHAT_SEND_LIMIT)->value('value'));
+        $this->assertSame('100', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::CHAT_SEND_LIMIT)->value('value'));
         $this->assertSame('0', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::CHAT_CAN_READ)->value('value'));
-        $this->assertSame('3', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::INTEREST_SEND_LIMIT)->value('value'));
-        $this->assertSame('2', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH)->value('value'));
-        $this->assertSame('5', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT)->value('value'));
+        $this->assertSame('100', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::INTEREST_SEND_LIMIT)->value('value'));
+        $this->assertSame('10', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH)->value('value'));
+        $this->assertSame('0', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT)->value('value'));
         $this->assertSame('1', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::BIODATA_EXPORT_LIMIT)->value('value'));
         $this->assertSame('0', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::BIODATA_PREMIUM_TEMPLATES)->value('value'));
     }
@@ -41,5 +42,12 @@ class PlanStandardFeatureKeysSeederTest extends TestCase
         $this->assertSame('-1', PlanFeature::query()->where('plan_id', $gold->id)->where('key', PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT)->value('value'));
         $this->assertSame('-1', PlanFeature::query()->where('plan_id', $gold->id)->where('key', PlanFeatureKeys::BIODATA_EXPORT_LIMIT)->value('value'));
         $this->assertSame('1', PlanFeature::query()->where('plan_id', $gold->id)->where('key', PlanFeatureKeys::BIODATA_PREMIUM_TEMPLATES)->value('value'));
+
+        $who = PlanQuotaPolicy::query()
+            ->where('plan_id', $gold->id)
+            ->where('feature_key', PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT)
+            ->firstOrFail();
+        $this->assertTrue((bool) $who->is_enabled);
+        $this->assertSame(PlanQuotaPolicy::REFRESH_UNLIMITED, (string) $who->refresh_type);
     }
 }

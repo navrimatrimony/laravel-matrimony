@@ -11,10 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Female tiers are seeded as "male tier with doubled numeric quotas". Doubling must apply to
- * numeric quotas ONLY — a boolean flag doubled from '1' to '2' is persisted as DISABLED by
- * {@see PlanQuotaPolicy::attributesFromCatalogFeatureMap()}, which silently revoked paid
- * features (notably chat_can_read) from every female paid plan.
+ * Male and female catalog tiers share identical quotas and boolean flags (no 2× female scaling).
  */
 class PlanGenderBooleanFeatureParityTest extends TestCase
 {
@@ -34,7 +31,6 @@ class PlanGenderBooleanFeatureParityTest extends TestCase
     {
         $this->seed(SubscriptionPlansSeeder::class);
 
-        // The exact production symptom: a paying female member could not read her chat messages.
         foreach (['basic_female', 'silver_female', 'gold_female'] as $slug) {
             $this->assertTrue(
                 $this->policyEnabled($slug, PlanFeatureKeys::CHAT_CAN_READ),
@@ -64,21 +60,22 @@ class PlanGenderBooleanFeatureParityTest extends TestCase
         }
     }
 
-    public function test_numeric_quotas_are_still_doubled_for_female_tiers(): void
+    public function test_numeric_quotas_match_between_male_and_female_tiers(): void
     {
         $this->seed(SubscriptionPlansSeeder::class);
 
-        // Guards the fix against over-correcting: real quotas must keep their 2x scaling.
-        $maleChatSend = PlanQuotaPolicy::query()
-            ->where('plan_id', Plan::query()->where('slug', 'silver_male')->value('id'))
-            ->where('feature_key', PlanFeatureKeys::CHAT_SEND_LIMIT)
-            ->value('limit_value');
-        $femaleChatSend = PlanQuotaPolicy::query()
-            ->where('plan_id', Plan::query()->where('slug', 'silver_female')->value('id'))
-            ->where('feature_key', PlanFeatureKeys::CHAT_SEND_LIMIT)
-            ->value('limit_value');
+        $maleContact = PlanQuotaPolicy::query()
+            ->where('plan_id', Plan::query()->where('slug', 'basic_male')->value('id'))
+            ->where('feature_key', PlanFeatureKeys::CONTACT_VIEW_LIMIT)
+            ->firstOrFail();
+        $femaleContact = PlanQuotaPolicy::query()
+            ->where('plan_id', Plan::query()->where('slug', 'basic_female')->value('id'))
+            ->where('feature_key', PlanFeatureKeys::CONTACT_VIEW_LIMIT)
+            ->firstOrFail();
 
-        $this->assertSame(100, (int) $maleChatSend);
-        $this->assertSame(200, (int) $femaleChatSend);
+        $this->assertSame((int) $maleContact->limit_value, (int) $femaleContact->limit_value);
+        $this->assertSame((string) $maleContact->refresh_type, (string) $femaleContact->refresh_type);
+        $this->assertSame(60, (int) $maleContact->limit_value);
+        $this->assertSame(PlanQuotaPolicy::REFRESH_LIFETIME, (string) $maleContact->refresh_type);
     }
 }
