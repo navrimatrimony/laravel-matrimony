@@ -177,9 +177,18 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
         Route::post('/plans/{suchakPlan}/payu/start', [PlanPaymentController::class, 'start'])
             ->middleware('throttle:10,1')
             ->name('plans.payu.start');
-        Route::get('/plans/{suchakPlan}/payu/test-success', [PlanPaymentController::class, 'testSuccessSimulate'])
-            ->middleware('throttle:10,1')
-            ->name('plans.payu.test-success');
+        /*
+        | PayU success simulator — self-signs a synthetic success POST with the real
+        | merchant salt and activates a paid Suchak plan without any money moving.
+        | Registered ONLY on local/testing so it does not exist as a route outside those
+        | environments; the 403 inside PlanPaymentController::testSuccessSimulate() stays
+        | as defence in depth.
+        */
+        if (app()->environment(['local', 'testing'])) {
+            Route::get('/plans/{suchakPlan}/payu/test-success', [PlanPaymentController::class, 'testSuccessSimulate'])
+                ->middleware('throttle:10,1')
+                ->name('plans.payu.test-success');
+        }
         Route::get('/intakes/create', [IntakeSourceController::class, 'create'])->name('intakes.create');
         Route::post('/intakes', [IntakeSourceController::class, 'store'])->name('intakes.store');
         Route::patch('/intakes/{intake}/review-snapshot', [BiodataIntakeReviewSnapshotController::class, 'update'])

@@ -25,9 +25,14 @@ final class PayuHasher
     /**
      * Build payment request hash and the exact field values that must appear in the POST body.
      *
+     * The salted preimage never leaves this method: it is not returned and not logged.
+     * PAYU_SALT in cleartext inside a log line is a merchant-account compromise, so the
+     * diagnostics below carry only salt-free facts (pipe count, field order, preimage
+     * length) plus a fingerprint of the *final* hash — which PayU already receives in the
+     * browser POST body, so it discloses nothing new.
+     *
      * @return array{
      *     hash: string,
-     *     hash_string: string,
      *     amount: string,
      *     key: string,
      *     txnid: string,
@@ -71,38 +76,47 @@ final class PayuHasher
         $udf5 = (string) $udf5;
 
         // Exactly 11 fields, then exactly 6 literal pipes before salt (no extra empty udf slots).
-        $string = implode('|', [
-            $key,
-            $txnid,
-            $amount,
-            $productinfo,
-            $firstname,
-            $email,
-            $udf1,
-            $udf2,
-            $udf3,
-            $udf4,
-            $udf5,
-        ]).'||||||'.$salt;
+        // Keyed so the field order is owned once and can be logged without re-typing it.
+        $preimageFields = [
+            'key' => $key,
+            'txnid' => $txnid,
+            'amount' => $amount,
+            'productinfo' => $productinfo,
+            'firstname' => $firstname,
+            'email' => $email,
+            'udf1' => $udf1,
+            'udf2' => $udf2,
+            'udf3' => $udf3,
+            'udf4' => $udf4,
+            'udf5' => $udf5,
+        ];
+
+        $string = implode('|', array_values($preimageFields)).'||||||'.$salt;
 
         $pipeCount = substr_count($string, '|');
-
-        Log::info('PAYU_HASH_PREIMAGE_PIPES', [
-            'pipe_count' => $pipeCount,
-            'expected_pipe_count' => self::EXPECTED_REQUEST_PIPE_COUNT,
-            'hash_string' => $string,
-        ]);
-
-        if (config('payu.debug_dd_hash_string')) {
-            dd($string);
-        }
 
         // PayU payment form expects lowercase hex for the hash in most integrations.
         $hash = strtolower(hash('sha512', $string));
 
+        // SECURITY: $string ends with PAYU_SALT in cleartext — never log it.
+        Log::info('PAYU_HASH_PREIMAGE_PIPES', [
+            'txnid' => $txnid,
+            'pipe_count' => $pipeCount,
+            'expected_pipe_count' => self::EXPECTED_REQUEST_PIPE_COUNT,
+            'pipe_match' => $pipeCount === self::EXPECTED_REQUEST_PIPE_COUNT,
+            'field_order' => array_keys($preimageFields),
+            'preimage_length' => strlen($string),
+            'hash_fingerprint' => self::fingerprint($hash),
+        ]);
+
+        // Debug-only dump of the salted preimage. Hard-gated off production regardless
+        // of how the flag is configured.
+        if (config('payu.debug_dd_hash_string') && ! app()->isProduction()) {
+            dd($string);
+        }
+
         return [
             'hash' => $hash,
-            'hash_string' => $string,
             'amount' => $amount,
             'key' => $key,
             'txnid' => $txnid,
@@ -231,5 +245,21 @@ final class PayuHasher
         }
 
         return strtolower(hash('sha512', $hashStringWithoutSalt.$salt));
+    }
+
+    /**
+     * Short, log-safe fingerprint of an already-public hash.
+     *
+     * Used to correlate log lines with the hash PayU actually received without
+     * printing anything the gateway POST body does not already contain.
+     * Never pass a salted preimage (or the salt itself) to this method.
+     */
+    public static function fingerprint(string $publicHash): string
+    {
+        if ($publicHash === '') {
+            return '';
+        }
+
+        return substr(hash('sha256', $publicHash), 0, 16);
     }
 }

@@ -177,8 +177,11 @@ class SubscriptionController extends Controller
             $udf5,
         );
 
+        // SECURITY: the salted preimage is deliberately absent — it carries PAYU_SALT in
+        // cleartext. PayuHasher already logs the salt-free shape of it (field order,
+        // pipe count, length). Everything below is in the browser POST body anyway.
         Log::info('PAYU_DEBUG_COMPARE', [
-            'hash_string' => $built['hash_string'],
+            'txnid' => $txnid,
             'pipe_count' => $built['pipe_count'],
             'expected_pipe_count' => PayuHasher::EXPECTED_REQUEST_PIPE_COUNT,
             'pipe_match' => $built['pipe_count'] === PayuHasher::EXPECTED_REQUEST_PIPE_COUNT,
@@ -529,10 +532,28 @@ class SubscriptionController extends Controller
         );
         $computed = strtolower(hash('sha512', $hashString));
 
+        // SECURITY: $hashString starts with PAYU_SALT — logging it publishes the secret in
+        // cleartext. Log the salt-free segments of the reverse preimage instead; together
+        // with the field order they reproduce every input a mismatch could come from.
         Log::info('PAYU RESPONSE HASH DEBUG', [
+            'txnid' => $txnid,
             'calculated' => $computed,
             'received' => $postedHash,
-            'hash_string' => $hashString,
+            'preimage_length' => strlen($hashString),
+            'reverse_preimage_without_salt' => [
+                'status' => (string) ($data['status'] ?? ''),
+                'udf5' => $udf5,
+                'udf4' => $udf4,
+                'udf3' => $udf3,
+                'udf2' => $udf2,
+                'udf1' => $udf1,
+                'email' => $email,
+                'firstname' => $firstname,
+                'productinfo' => $productinfo,
+                'amount' => $amount,
+                'txnid' => $txnid,
+                'key' => $key,
+            ],
         ]);
 
         if (! hash_equals($computed, $postedHash)) {
@@ -544,11 +565,13 @@ class SubscriptionController extends Controller
                 'amount' => isset($data['amount']) ? (float) $data['amount'] : null,
                 'source' => 'redirect',
             ]);
+            // SECURITY: no salted preimage here either — the salt-free breakdown is already
+            // in the PAYU RESPONSE HASH DEBUG line logged immediately above for this txnid.
             Log::warning('PayU subscription success: hash mismatch', [
                 'txnid' => $txnid,
                 'calculated' => $computed,
                 'received' => $postedHash,
-                'hash_string' => $hashString,
+                'preimage_length' => strlen($hashString),
             ]);
             Log::error('PAYU FAILURE POINT', [
                 'reason' => 'response_hash_mismatch',

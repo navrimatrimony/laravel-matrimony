@@ -58,9 +58,17 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
     Route::get('/referrals', [MemberReferralController::class, 'index'])->name('referrals.index');
     Route::post('/referrals/welcome/dismiss', [MemberReferralController::class, 'dismissRegistrationWelcome'])->name('referrals.welcome.dismiss');
 
-    Route::get('/test/payment/success/{planId}', [SubscriptionController::class, 'testPayuSuccessSimulate'])
-        ->whereNumber('planId')
-        ->name('test.payment.success');
+    /*
+    | PayU success simulator — self-signs a synthetic success POST with the real merchant
+    | salt and activates a paid subscription without any money moving. Registered ONLY on
+    | local/testing so it does not exist as a route outside those environments; the 403
+    | inside SubscriptionController::testPayuSuccessSimulate() stays as defence in depth.
+    */
+    if (app()->environment(['local', 'testing'])) {
+        Route::get('/test/payment/success/{planId}', [SubscriptionController::class, 'testPayuSuccessSimulate'])
+            ->whereNumber('planId')
+            ->name('test.payment.success');
+    }
 
     Route::post('/payments/{txnid}/dispute', [PaymentDisputeController::class, 'store'])
         ->name('payments.dispute.store');
