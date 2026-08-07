@@ -74,8 +74,8 @@ class PlanTerm extends Model
     }
 
     /**
-     * Product catalog billing keys only: 1 / 3 / 6 / 12 months.
-     * Admin plan forms and default seeders use this set — not five_yearly / lifetime.
+     * Default seed / fill-missing periods: 1 / 3 / 6 / 12 months only.
+     * Does NOT include five_yearly or lifetime — those are optional admin choices.
      *
      * @return list<string>
      */
@@ -90,19 +90,29 @@ class PlanTerm extends Model
     }
 
     /**
-     * All known billing keys (coupons, legacy rows, duration helpers).
-     * Includes five_yearly / lifetime for BC only — do not invent these on admin save.
-     * Legacy alias kept as {@see billingKeys()}.
+     * Admin plan form: selectable periods including optional five_yearly / lifetime.
+     * Sync upserts only keys the admin submits — never auto-invents these.
      *
      * @return list<string>
      */
-    public static function presetBillingKeys(): array
+    public static function adminSelectableBillingKeys(): array
     {
         return [
             ...self::productBillingKeys(),
             self::BILLING_FIVE_YEARLY,
             self::BILLING_LIFETIME,
         ];
+    }
+
+    /**
+     * All known billing keys (coupons, duration helpers, validation).
+     * Legacy alias kept as {@see billingKeys()}.
+     *
+     * @return list<string>
+     */
+    public static function presetBillingKeys(): array
+    {
+        return self::adminSelectableBillingKeys();
     }
 
     /**
@@ -268,8 +278,9 @@ class PlanTerm extends Model
         $seen = [];
         foreach ($rows as $index => $row) {
             $key = (string) ($row['billing_key'] ?? '');
-            // Only product periods (1/3/6/12 mo). Never invent five_yearly / lifetime / empty keys.
-            if ($key === '' || ! in_array($key, self::productBillingKeys(), true)) {
+            // Skip empty keys. Accept any admin-selectable key the form actually submitted
+            // (including intentional five_yearly) — never invent keys omitted from $rows.
+            if ($key === '' || ! in_array($key, self::adminSelectableBillingKeys(), true)) {
                 continue;
             }
             if (isset($seen[$key])) {
@@ -278,6 +289,10 @@ class PlanTerm extends Model
             $seen[$key] = true;
 
             $price = PlanPricing::normalizeMoney($row['price'] ?? 0);
+            // Reject empty/zero-price junk rows (defense if validation is bypassed).
+            if ($price <= 0) {
+                continue;
+            }
             $selling = array_key_exists('selling_price', $row)
                 ? PlanPricing::normalizeMoney($row['selling_price'])
                 : $price;

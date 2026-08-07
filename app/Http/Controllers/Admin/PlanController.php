@@ -29,12 +29,14 @@ class PlanController extends Controller
         'recommended',
     ];
 
-    /** Plan-wide duration preset: product periods only (1 / 3 / 6 / 12 months). */
+    /** Plan-wide duration preset (admin-selectable; five_yearly / lifetime optional, not auto-seeded). */
     public const ADMIN_PLAN_DURATION_PRESET_KEYS = [
         PlanTerm::BILLING_MONTHLY,
         PlanTerm::BILLING_QUARTERLY,
         PlanTerm::BILLING_HALF_YEARLY,
         PlanTerm::BILLING_YEARLY,
+        PlanTerm::BILLING_FIVE_YEARLY,
+        PlanTerm::BILLING_LIFETIME,
     ];
 
     /** Admin plan form: grace period (days); 0 = none (no extra days after paid window). */
@@ -303,12 +305,12 @@ class PlanController extends Controller
     {
         $request->validate([
             'term_rows' => ['required', 'array', 'min:1'],
-            'term_rows.*.billing_key' => ['required', 'string', Rule::in(PlanTerm::productBillingKeys())],
+            'term_rows.*.billing_key' => ['required', 'string', Rule::in(PlanTerm::adminSelectableBillingKeys())],
             'term_rows.*.price' => ['required', 'numeric', 'integer', 'gt:0'],
             'term_rows.*.selling_price' => ['required', 'numeric', 'integer', 'min:0'],
             'term_rows.*.quota_bonus_percent' => ['nullable', 'integer', 'min:0', 'max:100'],
             'term_rows.*.is_visible' => ['nullable'],
-            'default_billing_key' => ['required', 'string', Rule::in(PlanTerm::productBillingKeys())],
+            'default_billing_key' => ['required', 'string', Rule::in(PlanTerm::adminSelectableBillingKeys())],
         ]);
 
         $keys = collect($request->input('term_rows', []))
@@ -366,7 +368,7 @@ class PlanController extends Controller
                 continue;
             }
             $key = (string) ($row['billing_key'] ?? '');
-            if ($key === '' || ! in_array($key, PlanTerm::productBillingKeys(), true)) {
+            if ($key === '' || ! in_array($key, PlanTerm::adminSelectableBillingKeys(), true)) {
                 continue;
             }
             $price = \App\Support\PlanPricing::normalizeMoney($row['price'] ?? 0);
@@ -395,7 +397,7 @@ class PlanController extends Controller
     /**
      * True when a sync would be a no-op: each submitted row already matches DB,
      * and every DB term omitted from the form is already hidden (Phase 1 upsert).
-     * Hidden legacy keys (five_yearly / lifetime) must not force a false mismatch.
+     * Hidden omitted keys (e.g. five_yearly when not in form, lifetime) must not force a false mismatch.
      */
     private function matchesPersistedTermRows(Plan $plan, array $rows): bool
     {
@@ -463,11 +465,11 @@ class PlanController extends Controller
     {
         $explicit = trim((string) $request->input('default_billing_key', ''));
         if ($explicit !== '') {
-            return in_array($explicit, PlanTerm::productBillingKeys(), true) ? $explicit : null;
+            return in_array($explicit, PlanTerm::adminSelectableBillingKeys(), true) ? $explicit : null;
         }
 
         $durationPreset = trim((string) $request->input('duration_preset', ''));
-        if ($durationPreset !== '' && in_array($durationPreset, PlanTerm::productBillingKeys(), true)) {
+        if ($durationPreset !== '' && in_array($durationPreset, PlanTerm::adminSelectableBillingKeys(), true)) {
             return $durationPreset;
         }
 
@@ -573,7 +575,7 @@ class PlanController extends Controller
         $durationDays = (int) ($validated['duration_days'] ?? 0);
         if (! $isFreeSystemPlan) {
             $preset = (string) $request->input('duration_preset', '');
-            if (in_array($preset, PlanTerm::productBillingKeys(), true)) {
+            if (in_array($preset, PlanTerm::adminSelectableBillingKeys(), true)) {
                 $durationDays = PlanTerm::durationDaysFor($preset);
             }
         }
@@ -1090,15 +1092,15 @@ class PlanController extends Controller
         // Prefer persisted billing intent over legacy duration_days fallback.
         $plan->loadMissing('terms');
 
-        $productKeys = PlanTerm::productBillingKeys();
+        $selectable = PlanTerm::adminSelectableBillingKeys();
         $defaultBilling = strtolower(trim((string) ($plan->default_billing_key ?? '')));
-        if ($defaultBilling !== '' && in_array($defaultBilling, $productKeys, true)) {
+        if ($defaultBilling !== '' && in_array($defaultBilling, $selectable, true)) {
             return $defaultBilling;
         }
 
         $visibleTerm = $plan->terms
             ->where('is_visible', true)
-            ->filter(fn (PlanTerm $t) => in_array((string) $t->billing_key, $productKeys, true))
+            ->filter(fn (PlanTerm $t) => in_array((string) $t->billing_key, $selectable, true))
             ->sortBy('sort_order')
             ->first();
         if ($visibleTerm) {
@@ -1106,7 +1108,7 @@ class PlanController extends Controller
         }
 
         $firstTerm = $plan->terms
-            ->filter(fn (PlanTerm $t) => in_array((string) $t->billing_key, $productKeys, true))
+            ->filter(fn (PlanTerm $t) => in_array((string) $t->billing_key, $selectable, true))
             ->sortBy('sort_order')
             ->first();
         if ($firstTerm) {
@@ -1141,12 +1143,12 @@ class PlanController extends Controller
 
         if ($isEdit && $plan->exists) {
             $plan->loadMissing('terms');
-            $productKeys = array_flip(PlanTerm::productBillingKeys());
+            $selectable = array_flip(PlanTerm::adminSelectableBillingKeys());
 
-            // Only visible product periods (1/3/6/12). Hidden legacy five_yearly / lifetime
-            // must not reappear in the form and get re-posted on save.
+            // Visible rows only (incl. intentional five_yearly). Hidden auto-junk must not
+            // reappear in the form and get re-posted on save.
             $rows = $plan->terms
-                ->filter(fn (PlanTerm $t) => (bool) $t->is_visible && isset($productKeys[(string) $t->billing_key]))
+                ->filter(fn (PlanTerm $t) => (bool) $t->is_visible && isset($selectable[(string) $t->billing_key]))
                 ->sortBy('sort_order')
                 ->values()
                 ->map(fn (PlanTerm $t) => [
