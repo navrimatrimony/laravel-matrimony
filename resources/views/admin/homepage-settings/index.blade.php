@@ -2,19 +2,14 @@
 
 @section('content')
 @php
-    $tab = request('tab', 'controls');
-    // Labels/hints are keyed by HomepageContentService::SECTION_ORDER, which is
-    // also the order blocks appear on the public page. There is no sort-order
-    // box any more: a stray number silently reordering the homepage under a
-    // visitor is not worth the one time somebody wants to move a block.
-    // Keyed and ordered by HomepageContentService::defaults()['sections'], which
-    // omits the always-visible blocks — so 'plans' has no row here on purpose.
+    $tab = request('tab', 'content');
     $sectionLabels = [
         'trust' => 'Trust strip / विश्वास पट्टी',
         'how_it_works' => 'How it works / प्रक्रिया',
         'assisted_service' => 'Assisted service / सहाय्यक सेवा',
-        'safety' => 'Safety & verification / सुरक्षितता',
         'success_stories' => 'Success stories / यशोगाथा',
+        'safety' => 'Safety & verification / सुरक्षितता',
+        'plans' => 'Plans preview / योजना',
         'app_section' => 'App section / अ‍ॅप विभाग',
         'retail_outlet' => 'Retail outlet / कार्यालय',
         'final_cta' => 'Final CTA / शेवटची कृती',
@@ -23,18 +18,20 @@
         'trust' => 'Always shown when enabled.',
         'how_it_works' => 'Always shown when enabled.',
         'assisted_service' => 'Always shown when enabled (optional image on Images tab).',
-        'safety' => 'Always shown when enabled.',
         'success_stories' => 'Shown only when enabled and at least one published story exists (empty placeholder is never shown).',
+        'safety' => 'Always shown when enabled.',
+        'plans' => 'Shown only when enabled and at least one active visible plan exists.',
         'app_section' => 'Shown when enabled and Android link, iOS link, and/or phone mockup image is configured.',
         'retail_outlet' => 'Shown only when enabled and outlet image is uploaded.',
         'final_cta' => 'Always shown when enabled.',
     ];
-    // Religion/caste are owned by the community mode select and state/district
-    // by the location mode select — one field, one owner, no AND between two
-    // controls that disagree.
     $searchFieldLabels = [
         'gender' => 'Gender',
         'age' => 'Age range',
+        'religion' => 'Religion',
+        'caste' => 'Caste',
+        'state' => 'State',
+        'district' => 'District',
         'marital_status' => 'Marital status',
     ];
 @endphp
@@ -43,7 +40,7 @@
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
             <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Homepage settings</h1>
-            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Section images, which blocks are shown, app store links, search fields, and success stories.</p>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Marathi + English homepage copy, section images, visibility, search fields, and success stories.</p>
         </div>
         <a href="{{ url('/') }}" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 dark:border-gray-600 dark:bg-gray-800 dark:text-indigo-200">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H18m0 0v4.5M18 6l-7.5 7.5M6 6h4.5M6 6v12h12v-4.5" /></svg>
@@ -63,6 +60,10 @@
 
     <div class="border-b border-gray-200 dark:border-gray-700">
         <nav class="-mb-px flex flex-wrap gap-5">
+            <button type="button" @click="tab='content'" :class="tab === 'content' ? 'border-indigo-600 text-indigo-700 dark:border-indigo-400 dark:text-indigo-200' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'" class="inline-flex items-center gap-2 border-b-2 px-1 py-3 text-sm font-semibold">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6.75h15M4.5 12h15M4.5 17.25h9" /></svg>
+                Content
+            </button>
             <button type="button" @click="tab='controls'" :class="tab === 'controls' ? 'border-indigo-600 text-indigo-700 dark:border-indigo-400 dark:text-indigo-200' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'" class="inline-flex items-center gap-2 border-b-2 px-1 py-3 text-sm font-semibold">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5" /></svg>
                 Controls
@@ -81,39 +82,69 @@
     <form method="POST" action="{{ route('admin.homepage-settings.update') }}" class="space-y-6">
         @csrf
 
-        <div x-show="tab === 'controls'" x-cloak class="space-y-6">
-            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
-                <p class="font-semibold">Homepage wording is not edited here any more.</p>
-                <p class="mt-1 leading-6">
-                    Every visible sentence — hero, assisted service, success stories, plans, app section, closing call to action — now lives in
-                    <code class="rounded bg-white/70 px-1 py-0.5 text-xs dark:bg-black/30">lang/mr/homepage.php</code> and
-                    <code class="rounded bg-white/70 px-1 py-0.5 text-xs dark:bg-black/30">lang/en/homepage.php</code>, so a copy change goes through review like any other change.
-                    To override a sentence on this deployment without a deploy, use <strong>Translations</strong> and edit the matching <code class="rounded bg-white/70 px-1 py-0.5 text-xs dark:bg-black/30">homepage.*</code> key.
-                    Prices are never typed anywhere — they are read live from the plan catalog.
-                </p>
+        <div x-show="tab === 'content'" x-cloak class="space-y-6">
+            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                @foreach ([
+                    'hero_badge' => 'Hero badge',
+                    'hero_title' => 'Hero title',
+                    'hero_subtitle' => 'Hero subtitle',
+                    'primary_cta' => 'Primary button',
+                    'secondary_cta' => 'Secondary button',
+                    'assisted_title' => 'Assisted title',
+                    'assisted_body' => 'Assisted body',
+                    'success_title' => 'Success title',
+                    'success_intro' => 'Success intro',
+                    'final_cta_title' => 'Final CTA title',
+                    'final_cta_body' => 'Final CTA body',
+                    'app_title' => 'App section title',
+                    'app_body' => 'App section body',
+                ] as $base => $label)
+                    <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                        <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $label }}</h2>
+                        <div class="mt-3 grid grid-cols-1 gap-3">
+                            <div>
+                                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">Marathi</label>
+                                @if (str_contains($base, 'body') || str_contains($base, 'subtitle') || str_contains($base, 'intro'))
+                                    <textarea name="{{ $base }}_mr" rows="3" class="block w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old($base.'_mr', $settings[$base.'_mr'] ?? '') }}</textarea>
+                                @else
+                                    <input type="text" name="{{ $base }}_mr" value="{{ old($base.'_mr', $settings[$base.'_mr'] ?? '') }}" class="block w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                                @endif
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">English</label>
+                                @if (str_contains($base, 'body') || str_contains($base, 'subtitle') || str_contains($base, 'intro'))
+                                    <textarea name="{{ $base }}_en" rows="3" class="block w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old($base.'_en', $settings[$base.'_en'] ?? '') }}</textarea>
+                                @else
+                                    <input type="text" name="{{ $base }}_en" value="{{ old($base.'_en', $settings[$base.'_en'] ?? '') }}" class="block w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
             </div>
+        </div>
 
+        <div x-show="tab === 'controls'" x-cloak class="space-y-6">
             <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                    <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Homepage sections — show / hide</h2>
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Uncheck to hide a block on the public homepage. The order below is the order visitors see, and it is fixed in code. Hero and hero search are always visible.</p>
+                    <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Homepage sections — show / hide & order</h2>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Uncheck to hide a block on the public homepage. Lower sort order appears earlier. Hero search is always visible.</p>
                     <div class="mt-4 space-y-3">
                         @foreach ($sectionLabels as $key => $label)
                             <div class="rounded-md border border-gray-100 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/50">
-                                <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-800 dark:text-gray-100">
-                                    <input type="checkbox" name="section_enabled[]" value="{{ $key }}" @checked((bool) data_get($settings, "sections.$key.enabled", true)) class="rounded border-gray-300 text-indigo-600">
-                                    {{ $label }}
-                                </label>
+                                <div class="grid grid-cols-[1fr_6rem] items-center gap-3">
+                                    <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-800 dark:text-gray-100">
+                                        <input type="checkbox" name="section_enabled[]" value="{{ $key }}" @checked((bool) data_get($settings, "sections.$key.enabled", true)) class="rounded border-gray-300 text-indigo-600">
+                                        {{ $label }}
+                                    </label>
+                                    <input type="number" min="1" max="999" name="section_sort_order[{{ $key }}]" value="{{ data_get($settings, "sections.$key.sort_order", 50) }}" class="block w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" title="Sort order">
+                                </div>
                                 @if (! empty($sectionHints[$key] ?? ''))
                                     <p class="mt-2 text-[11px] leading-5 text-gray-500 dark:text-gray-400">{{ $sectionHints[$key] }}</p>
                                 @endif
                             </div>
                         @endforeach
                     </div>
-                    <p class="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-[11px] leading-5 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200">
-                        <strong>Plans &amp; prices has no switch.</strong> It appears automatically whenever at least one plan is active and visible (Plans screen), and is skipped when none is.
-                        It is the only place a signed-out visitor — including a payment partner reviewing this site — can see what is sold and what it costs, so it is not something that can be hidden from here.
-                    </p>
                 </div>
 
                 <div class="space-y-4">
@@ -146,7 +177,7 @@
 
                 <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                     <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Search form controls</h2>
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">These fields submit to the existing profile search route. Religion and caste are controlled by <em>Community fields</em> below, state and district by <em>Location fields</em> — each field has one control, not two.</p>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">These fields submit to the existing profile search route.</p>
                     <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                         @foreach ($searchFieldLabels as $key => $label)
                             <label class="inline-flex items-center gap-2 rounded-md border border-gray-100 bg-gray-50 p-3 text-sm font-medium text-gray-800 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-100">
@@ -160,8 +191,8 @@
                         <div>
                             <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">Age control style</label>
                             <select name="hero_search_age_control" class="block w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
-                                <option value="inputs" @selected(($settings['hero_search_age_control'] ?? 'slider') === 'inputs')>Two inputs: Age from + Age to</option>
-                                <option value="slider" @selected(($settings['hero_search_age_control'] ?? 'slider') === 'slider')>Range slider with hidden real values</option>
+                                <option value="inputs" @selected(($settings['hero_search_age_control'] ?? 'inputs') === 'inputs')>Two inputs: Age from + Age to</option>
+                                <option value="slider" @selected(($settings['hero_search_age_control'] ?? 'inputs') === 'slider')>Range slider with hidden real values</option>
                             </select>
                         </div>
                         <div>
@@ -187,7 +218,7 @@
             </div>
         </div>
 
-        <div x-show="tab === 'controls'" x-cloak class="flex justify-end">
+        <div x-show="tab === 'content' || tab === 'controls'" x-cloak class="flex justify-end">
             <button type="submit" class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
                 Save homepage settings

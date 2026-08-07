@@ -4,80 +4,9 @@ namespace App\Services\Admin;
 
 use App\Models\AdminSetting;
 
-/**
- * Owner of the `homepage_content_settings` blob — the small set of homepage
- * decisions that genuinely change per deployment and must not need a deploy.
- *
- * What this service deliberately does NOT own any more:
- *
- *  - Homepage prose. Every visible word now lives in lang/{mr,en}/homepage.php
- *    (overridable at runtime through Admin -> Translations, which writes the
- *    same keys). Copy is the surface a payment-gateway reviewer reads signed
- *    out; it belongs somewhere with a diff and a reviewer. Two owners for one
- *    sentence is what let "Plans are managed from the admin panel" and "Real
- *    stories can be featured here with consent and admin approval" reach real
- *    visitors.
- *  - Homepage section order. It is a fixed editorial decision, held in
- *    {@see self::SECTION_ORDER}. A free-text sort number that silently
- *    reorders the page under a reviewer is not worth the one time somebody
- *    might want to move a block.
- *  - Success-story slider mechanics. Eleven keys were readable by the view and
- *    writable by a route whose form was never included anywhere — configuration
- *    that looked live and was not. The values that everyone has actually been
- *    seeing are now constants in the view.
- *
- * Removing a key from {@see self::defaults()} does not remove it from a
- * database row that already carries it: {@see self::settings()} merges
- * defaults INTO the saved blob, so a stale key survives until the next admin
- * save (which rebuilds the blob from these keys only). That is safe only
- * because no reader looks at the removed keys any more — the view reads lang
- * files and constants for them. Never retire a key here without also retiring
- * its reader, or the change silently does nothing on any site that has saved
- * the setting once.
- */
 class HomepageContentService
 {
     public const SETTING_KEY = 'homepage_content_settings';
-
-    /**
-     * The order homepage blocks appear in, top to bottom. Pricing sits high on
-     * purpose: a stranger — including a payment-gateway reviewer — must be able
-     * to see what is sold and what it costs without hunting for it.
-     *
-     * @var list<string>
-     */
-    public const SECTION_ORDER = [
-        'trust',
-        'how_it_works',
-        'plans',
-        'assisted_service',
-        'safety',
-        'success_stories',
-        'app_section',
-        'retail_outlet',
-        'final_cta',
-    ];
-
-    /**
-     * Sections with no off switch.
-     *
-     * `plans` is the only block that answers "what is sold and what does it
-     * cost". It is also the only page on this site where a signed-out visitor
-     * can see a price at all, because /plans is behind auth. A checkbox that
-     * hides every price from the public site is not a setting anyone should be
-     * holding — and it had in fact been switched off, so the homepage was
-     * showing no price to anyone. It renders whenever at least one active,
-     * visible plan exists, and is skipped when none does.
-     *
-     * These keys are absent from {@see self::defaults()}, so a stale
-     * `sections.plans.enabled = false` already in a saved blob is never read
-     * and is dropped on the next admin save.
-     *
-     * @var list<string>
-     */
-    public const ALWAYS_VISIBLE_SECTIONS = [
-        'plans',
-    ];
 
     /**
      * @return array<string, mixed>
@@ -107,40 +36,113 @@ class HomepageContentService
     public function defaults(): array
     {
         return [
-            // Store links change without a deploy, and one of them being wrong
-            // sends every visitor to somebody else's app. Genuinely editable.
+            'hero_badge_mr' => 'विश्वास, कुटुंब आणि जुळणारे स्थळ',
+            'hero_badge_en' => 'Trusted Marathi Matrimony',
+            'hero_title_mr' => 'सातजन्माच्या गाठी स्वर्गातच बांधलेल्या असतात',
+            'hero_title_en' => 'Matches for a lifetime are made in heaven.',
+            'hero_subtitle_mr' => 'आम्ही फक्त योग्य भेट घडवतो.',
+            'hero_subtitle_en' => 'We simply help the right people meet.',
+            'primary_cta_mr' => 'नोंदणी करा',
+            'primary_cta_en' => 'Register',
+            'secondary_cta_mr' => 'स्थळ शोधा',
+            'secondary_cta_en' => 'Search Profiles',
+            'assisted_title_mr' => 'सहाय्यक सेवा',
+            'assisted_title_en' => 'Assisted Service',
+            'assisted_body_mr' => 'कुटुंबांना प्रोफाइल, पसंती आणि संवाद यामध्ये संयमी मदत.',
+            'assisted_body_en' => 'Support for families that want a guided, matrimony-focused experience.',
+            'success_title_mr' => 'यशोगाथा',
+            'success_title_en' => 'Success Stories',
+            'success_intro_mr' => 'विश्वासाने सुरू झालेला संवाद आयुष्यभराच्या नात्यात बदलला.',
+            'success_intro_en' => 'Real stories can be featured here with consent and admin approval.',
+            'final_cta_title_mr' => 'योग्य जोडीदाराचा शोध सुरू करा',
+            'final_cta_title_en' => 'Ready to explore matches?',
+            'final_cta_body_mr' => 'प्रोफाइल तयार करा किंवा उपलब्ध स्थळे शोधा.',
+            'final_cta_body_en' => 'Create your profile or open the search flow with the same filters used inside the platform.',
+            'app_title_mr' => 'मोबाइल अ‍ॅप',
+            'app_title_en' => 'Download our mobile app',
+            'app_body_mr' => 'Android आणि iOS वर शोध, interests आणि संवाद सोपे ठेवा.',
+            'app_body_en' => 'Search profiles, manage interests, and chat on Android and iOS.',
             'app_android_url' => '',
             'app_ios_url' => '',
             'app_show_android' => true,
             'app_show_ios' => true,
-
-            // The only per-block control left: show it or hide it. Order is
-            // fixed in code (see SECTION_ORDER), and the blocks in
-            // ALWAYS_VISIBLE_SECTIONS have no switch at all.
-            'sections' => array_fill_keys(
-                array_values(array_diff(self::SECTION_ORDER, self::ALWAYS_VISIBLE_SECTIONS)),
-                ['enabled' => true],
-            ),
-
-            // Hero search form. Each field has exactly ONE owner:
-            //  - gender / age / marital_status -> these checkboxes
-            //  - religion + caste              -> hero_search_community_mode
-            //  - state + district              -> hero_search_location_mode
-            // Previously a caste field needed BOTH search_fields.caste and the
-            // community mode to say yes, which is one decision with two owners
-            // and a failure mode nobody could explain from the admin screen.
+            'sections' => [
+                'trust' => ['enabled' => true, 'sort_order' => 10],
+                'how_it_works' => ['enabled' => true, 'sort_order' => 20],
+                'assisted_service' => ['enabled' => true, 'sort_order' => 30],
+                'success_stories' => ['enabled' => true, 'sort_order' => 40],
+                'safety' => ['enabled' => true, 'sort_order' => 50],
+                'plans' => ['enabled' => true, 'sort_order' => 60],
+                'app_section' => ['enabled' => true, 'sort_order' => 70],
+                'retail_outlet' => ['enabled' => true, 'sort_order' => 80],
+                'final_cta' => ['enabled' => true, 'sort_order' => 90],
+            ],
             'search_fields' => [
                 'gender' => true,
                 'age' => true,
+                'religion' => false,
+                'caste' => true,
+                'state' => true,
+                'district' => true,
                 'marital_status' => true,
             ],
             'hero_search_age_control' => 'slider',
             'hero_search_community_mode' => 'caste',
             'hero_search_location_mode' => 'state_district',
-
-            // Read by the homepage route when it loads published stories. Not
-            // admin-editable — six is a page-design decision, not a setting.
             'story_limit' => 6,
+            'success_stories_display' => 'slider',
+            'success_stories_autoplay' => true,
+            'success_stories_autoplay_seconds' => 5,
+            'success_stories_slides_mobile' => 1,
+            'success_stories_slides_tablet' => 2,
+            'success_stories_slides_desktop' => 3,
+            'success_stories_show_arrows' => true,
+            'success_stories_show_dots' => true,
+            'success_stories_pause_on_hover' => true,
+            'success_stories_loop' => true,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function storiesDisplayKeys(): array
+    {
+        return [
+            'story_limit',
+            'success_stories_display',
+            'success_stories_autoplay',
+            'success_stories_autoplay_seconds',
+            'success_stories_slides_mobile',
+            'success_stories_slides_tablet',
+            'success_stories_slides_desktop',
+            'success_stories_show_arrows',
+            'success_stories_show_dots',
+            'success_stories_pause_on_hover',
+            'success_stories_loop',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     * @return array<string, mixed>
+     */
+    public function normalizeStoriesDisplayInput(array $input): array
+    {
+        return [
+            'story_limit' => max(1, min(24, (int) ($input['story_limit'] ?? 6))),
+            'success_stories_display' => in_array(($input['success_stories_display'] ?? 'grid'), ['grid', 'slider'], true)
+                ? $input['success_stories_display']
+                : 'grid',
+            'success_stories_autoplay' => filter_var($input['success_stories_autoplay'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            'success_stories_autoplay_seconds' => max(2, min(30, (int) ($input['success_stories_autoplay_seconds'] ?? 5))),
+            'success_stories_slides_mobile' => max(1, min(2, (int) ($input['success_stories_slides_mobile'] ?? 1))),
+            'success_stories_slides_tablet' => max(1, min(3, (int) ($input['success_stories_slides_tablet'] ?? 2))),
+            'success_stories_slides_desktop' => max(1, min(4, (int) ($input['success_stories_slides_desktop'] ?? 3))),
+            'success_stories_show_arrows' => filter_var($input['success_stories_show_arrows'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            'success_stories_show_dots' => filter_var($input['success_stories_show_dots'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            'success_stories_pause_on_hover' => filter_var($input['success_stories_pause_on_hover'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            'success_stories_loop' => filter_var($input['success_stories_loop'] ?? true, FILTER_VALIDATE_BOOLEAN),
         ];
     }
 
