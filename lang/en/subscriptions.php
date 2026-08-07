@@ -170,7 +170,7 @@ return [
     'pricing_feature_chat_send' => 'Initiate new chats',
     'pricing_feature_chat_send_daily' => 'Initiate new chats (per day)',
     'pricing_feature_photo_full' => 'Full photo albums (no blur)',
-    'pricing_feature_contact_unlock' => 'Contact unlock & reveals',
+    'pricing_feature_contact_unlock' => 'Contact unlock',
     'pricing_feature_who_viewed' => 'Who viewed your profile',
     'pricing_feature_who_viewed_preview' => 'Who viewed — preview',
     'who_viewed_catalog_see_all_viewers' => 'See all viewers',

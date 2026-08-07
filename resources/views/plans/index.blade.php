@@ -16,8 +16,8 @@
     $isFreeViewer = ! $eff->id || \App\Models\Plan::isFreeCatalogSlug((string) ($eff->slug ?? ''));
 
     $pricingHighlightFeatureOrder = [
-        PlanFeatureKeys::CHAT_SEND_LIMIT,
         PlanFeatureKeys::CONTACT_VIEW_LIMIT,
+        PlanFeatureKeys::CHAT_SEND_LIMIT,
     ];
 
     /**

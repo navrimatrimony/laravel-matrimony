@@ -13,25 +13,34 @@ use App\Services\SubscriptionService;
 final class PlanQuotaPolicyKeys
 {
     /**
-     * Display / persistence order (matches product priority for admins).
+     * Display / persistence order for admin + public/mobile pricing catalogs.
+     *
+     * Shared comparison ladder (flat list, no tier section headers in UI):
+     * 1) Contact unlock always first
+     * 2) Features that appear from Basic
+     * 3) Silver-adds, then Gold-adds
      *
      * @return list<string>
      */
     public static function ordered(): array
     {
         return [
-            PlanFeatureKeys::CHAT_SEND_LIMIT,
-            PlanFeatureKeys::CHAT_CAN_READ,
+            // Always first — comparison anchor across plans.
             PlanFeatureKeys::CONTACT_VIEW_LIMIT,
+            // Basic-tier features (present from Basic upward).
             PlanFeatureKeys::INTEREST_SEND_LIMIT,
-            PlanFeatureKeys::INTEREST_VIEW_LIMIT,
-            SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
-            PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT,
+            PlanFeatureKeys::CHAT_SEND_LIMIT,
             PlanFeatureKeys::PHOTO_FULL_ACCESS,
+            PlanFeatureKeys::CHAT_CAN_READ,
+            PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT,
+            PlanFeatureKeys::INTEREST_VIEW_LIMIT,
+            PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH,
+            SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
+            // Silver-adds (enabled starting at Silver in seeded ladder).
             PlanFeatureKeys::PROFILE_BOOST_PER_WEEK,
             PlanFeatureKeys::PRIORITY_LISTING,
-            PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH,
             PlanFeatureKeys::ADVANCED_PROFILE_SEARCH,
+            // Gold-add slot (currently off on seeded paid tiers; keep last for when enabled).
             PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT,
         ];
     }

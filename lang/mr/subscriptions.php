@@ -67,7 +67,7 @@ return [
     'pricing_feature_chat_send' => 'नवीन चॅट सुरू करणे',
     'pricing_feature_chat_send_daily' => 'नवीन चॅट सुरू करणे (दैनिक)',
     'pricing_feature_photo_full' => 'पूर्ण फोटो अल्बम (ब्लर नाही)',
-    'pricing_feature_contact_unlock' => 'संपर्क अनलॉक व प्रकटीकरण',
+    'pricing_feature_contact_unlock' => 'संपर्क अनलॉक',
     'pricing_feature_who_viewed' => 'तुमचे प्रोफाइल कोणी पाहिले',
     'pricing_feature_who_viewed_preview' => 'कोणी पाहिले — झलक',
     'who_viewed_catalog_see_all_viewers' => 'सर्व पाहणाऱ्यांची यादी',
