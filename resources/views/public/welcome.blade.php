@@ -866,7 +866,10 @@
                                             {{ $primaryCta }}
                                         </a>
                                     @endif
-                                    <a href="{{ route('matrimony.profiles.index') }}" class="nmn-hero-btn secondary">
+                                    {{-- Browsing needs an account, so a guest who taps this
+                                         gets the register form rather than a bare login
+                                         wall for a page they have no way into yet. --}}
+                                    <a href="{{ route('register') }}" class="nmn-hero-btn secondary">
                                         <svg class="homepage-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.2-5.2m0 0A7.5 7.5 0 105.2 5.2a7.5 7.5 0 0010.6 10.6z" /></svg>
                                         {{ $secondaryCta }}
                                     </a>
@@ -1262,7 +1265,7 @@
                             <h2 class="{{ $devanagariClass }} text-3xl font-extrabold">{{ $finalCtaTitle }}</h2>
                             <p class="{{ $devanagariClass }} mx-auto mt-4 max-w-2xl text-sm leading-7 text-white/90">{{ $finalCtaBody }}</p>
                             <div class="mt-6 flex flex-wrap justify-center gap-3">
-                                <a href="{{ route('matrimony.profiles.index') }}" class="inline-flex items-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-[var(--brand-red)] hover:bg-red-50">
+                                <a href="{{ auth()->check() ? route('matrimony.profiles.index') : route('register') }}" class="inline-flex items-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-[var(--brand-red)] hover:bg-red-50">
                                     <svg class="homepage-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.2-5.2M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z" /></svg>
                                     {{ __('homepage.final_search') }}
                                 </a>
