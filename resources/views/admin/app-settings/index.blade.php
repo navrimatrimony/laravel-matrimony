@@ -500,25 +500,13 @@
                         <input type="email" name="support_email" value="{{ old('support_email', $siteIdentity['support_email'] ?? '') }}" placeholder="{{ $siteIdentityEffective['support_email'] ?? '' }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
                     </div>
                     <div>
-                        <label class="block text-xs mb-1">Sales email</label>
-                        <input type="email" name="sales_email" value="{{ old('sales_email', $siteIdentity['sales_email'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
-                    </div>
-                    <div>
-                        <label class="block text-xs mb-1">Info email</label>
-                        <input type="email" name="info_email" value="{{ old('info_email', $siteIdentity['info_email'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
-                    </div>
-                    <div>
                         <label class="block text-xs mb-1">Primary phone</label>
                         <input type="text" name="primary_phone" value="{{ old('primary_phone', $siteIdentity['primary_phone'] ?? '') }}" placeholder="{{ $siteIdentityEffective['primary_phone'] ?? '' }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
-                    </div>
-                    <div>
-                        <label class="block text-xs mb-1">Secondary phone</label>
-                        <input type="text" name="secondary_phone" value="{{ old('secondary_phone', $siteIdentity['secondary_phone'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-xs mb-1">Address</label>
                         <textarea name="address" rows="3" placeholder="{{ $siteIdentityEffective['registered_address'] ?? '' }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">{{ old('address', $siteIdentity['address'] ?? '') }}</textarea>
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Empty = the registered office above is published. Anything typed here replaces it on the footer only; the legal pages always show the registered office.</p>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Not published anywhere. The registered office in config/legal.php is the one address every public surface prints — footer, contact page and legal pages alike. This box is kept only for internal reference.</p>
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-xs mb-1">Google Maps embed link</label>

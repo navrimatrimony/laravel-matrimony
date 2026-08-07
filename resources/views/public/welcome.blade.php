@@ -1197,7 +1197,10 @@
                                     </div>
                                 @endforeach
                             </div>
-                            <a href="{{ route('plans.index') }}" class="mt-5 inline-flex items-center gap-2 rounded-md border border-red-200 px-4 py-2 text-sm font-bold text-[var(--brand-red)] hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/40">
+                            {{-- Guests get the public pricing page. Sending them to
+                                 the auth-gated /plans put a login form behind the one
+                                 button on this site that promises prices. --}}
+                            <a href="{{ auth()->check() ? route('plans.index') : route('public.pricing') }}" class="mt-5 inline-flex items-center gap-2 rounded-md border border-red-200 px-4 py-2 text-sm font-bold text-[var(--brand-red)] hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/40">
                                 <svg class="homepage-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 15h19.5M10.5 3.75v16.5m3-16.5v16.5" /></svg>
                                 {{ __('homepage.view_plans') }}
                             </a>

@@ -606,5 +606,11 @@
                 });
             })();
         </script>
+        {{-- The Suchak landing page is a standalone shell, but it is public and
+             the site footer links to it. Without this include a visitor who
+             follows "For Suchaks" lands on a page with no terms, privacy,
+             refund or contact anywhere — a legal dead end on a page a payment
+             reviewer can reach. --}}
+        @include('layouts.site-footer')
     </body>
 </html>
