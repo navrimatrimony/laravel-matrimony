@@ -1275,75 +1275,13 @@
             @endforeach
         </main>
 
-        <footer class="bg-zinc-950 px-4 py-10 text-sm text-zinc-400 sm:px-6">
-            <div class="mx-auto grid max-w-7xl gap-8 sm:grid-cols-2 lg:grid-cols-4">
-                <div>
-                    <p class="font-devanagari text-lg font-bold text-white">{{ $siteIdentitySettings['company_name'] ?: $siteName }}</p>
-                    <p class="{{ $devanagariClass }} mt-2 max-w-md text-xs leading-6 text-zinc-500">{{ __('homepage.footer_disclaimer') }}</p>
-                    @if (! empty($siteIdentitySettings['address']))
-                        <p class="mt-3 whitespace-pre-line text-xs leading-6 text-zinc-500">{{ $siteIdentitySettings['address'] }}</p>
-                    @endif
-                </div>
-                <div class="flex flex-col gap-2">
-                    <span class="text-xs font-bold uppercase text-zinc-500">{{ __('homepage.footer_contact') }}</span>
-                    @foreach ([
-                        'support_email' => 'Support',
-                        'sales_email' => 'Sales',
-                        'info_email' => 'Info',
-                    ] as $field => $label)
-                        @if (! empty($siteIdentitySettings[$field]))
-                            <a href="mailto:{{ $siteIdentitySettings[$field] }}" class="text-white hover:underline">{{ $label }}: {{ $siteIdentitySettings[$field] }}</a>
-                        @endif
-                    @endforeach
-                    @foreach (['primary_phone', 'secondary_phone'] as $field)
-                        @if (! empty($siteIdentitySettings[$field]))
-                            <a href="tel:{{ preg_replace('/\s+/', '', $siteIdentitySettings[$field]) }}" class="text-white hover:underline">{{ $siteIdentitySettings[$field] }}</a>
-                        @endif
-                    @endforeach
-                </div>
-                <div class="flex flex-col gap-2">
-                    <span class="text-xs font-bold uppercase text-zinc-500">{{ __('homepage.footer_navigate') }}</span>
-                    <a href="{{ route('matrimony.profiles.index') }}" class="text-white hover:underline">{{ __('homepage.footer_partner_search') }}</a>
-                    @if (Route::has('suchak.home'))
-                        <a href="{{ route('suchak.home') }}" class="text-white hover:underline">{{ __('homepage.footer_suchak') }}</a>
-                    @endif
-                    @if (Route::has('plans.index'))
-                        <a href="{{ route('plans.index') }}" class="text-white hover:underline">{{ __('homepage.footer_plans') }}</a>
-                    @endif
-                    @if (Route::has('login'))
-                        <a href="{{ route('login') }}" class="text-white hover:underline">{{ __('homepage.login') }}</a>
-                    @endif
-                    @if (Route::has('register'))
-                        <a href="{{ route('register') }}" class="text-white hover:underline">{{ __('homepage.register') }}</a>
-                    @endif
-                </div>
-                <div class="flex flex-col gap-2">
-                    <span class="text-xs font-bold uppercase text-zinc-500">{{ __('homepage.footer_legal') }}</span>
-                    @foreach (\App\Support\LegalDocument::links() as $legalLink)
-                        <a href="{{ $legalLink['url'] }}" class="{{ $devanagariClass }} text-white hover:underline">{{ $legalLink['label'] }}</a>
-                    @endforeach
-                </div>
-            </div>
-            @php
-                $socialLinks = array_filter([
-                    'Facebook' => $siteIdentitySettings['facebook_url'] ?? null,
-                    'Instagram' => $siteIdentitySettings['instagram_url'] ?? null,
-                    'YouTube' => $siteIdentitySettings['youtube_url'] ?? null,
-                    'LinkedIn' => $siteIdentitySettings['linkedin_url'] ?? null,
-                    'X' => $siteIdentitySettings['x_url'] ?? null,
-                ]);
-            @endphp
-            @if (! empty($socialLinks))
-                <div class="mx-auto mt-6 flex max-w-7xl flex-wrap gap-4 text-xs">
-                    @foreach ($socialLinks as $label => $url)
-                        <a href="{{ $url }}" target="_blank" rel="noopener noreferrer" class="text-white hover:underline">{{ $label }}</a>
-                    @endforeach
-                </div>
-            @endif
-            <div class="mx-auto mt-8 max-w-7xl border-t border-zinc-800 pt-6 text-xs text-zinc-600">
-                {{ $siteIdentity->copyrightText() }}
-            </div>
-        </footer>
+        {{--
+            One footer for the whole site — see resources/views/layouts/site-footer.blade.php.
+            The homepage no longer carries its own copy: contact facts, the registered
+            office, the legal links and the new /pricing, /about, /contact, /shipping
+            links all come from that single partial, so a change lands everywhere at once.
+        --}}
+        @include('layouts.site-footer')
 
         @if (($addressStates ?? collect())->isNotEmpty())
             <script>

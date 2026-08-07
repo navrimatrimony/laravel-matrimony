@@ -49,6 +49,9 @@
                 </div>
             </div>
         </div>
+
+        {{-- Shared site footer: legal, pricing, about, contact and shipping links on every shell. --}}
+        @include('layouts.site-footer')
         @stack('scripts')
     </body>
 </html>

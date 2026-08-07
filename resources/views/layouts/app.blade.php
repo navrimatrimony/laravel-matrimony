@@ -72,7 +72,10 @@
 
             <!-- Page Content -->
             <!-- Page Content -->
-				<main class="{{ $showMobileStickyNav ? 'pb-24 md:pb-0' : '' }}">
+				{{-- Sticky-nav clearance now belongs to the shared footer below, which is
+				     the last thing on the page; padding it here as well would leave a
+				     dead 6rem gap between the content and the footer on mobile. --}}
+				<main>
                 @include('partials.laravel-validation-payload')
                 {{-- Flash messages: single place, dismissible + auto-hide (see resources/js/app.js) --}}
 @php($memberNotice = session('member_notice'))
@@ -165,5 +168,8 @@
 
 
         </div>
+
+        {{-- Shared site footer: legal, pricing, about, contact and shipping links on every shell. --}}
+        @include('layouts.site-footer', ['footerBottomInset' => $showMobileStickyNav])
     </body>
 </html>
