@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\NotificationPreferenceApiController;
 use App\Http\Controllers\Api\ProfileActionApiController;
 use App\Http\Controllers\Api\ProfileFieldLockApiController;
 use App\Http\Controllers\Api\ProfileSetupLookupController;
+use App\Http\Controllers\Api\ProfileViewTrendApiController;
 use App\Http\Controllers\Api\ReligionLookupController;
 use Illuminate\Support\Facades\Route;
 
@@ -48,6 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/matrimony-profile/photos/{photo}', [MobileProfilePhotoApiController::class, 'destroy']); // DELETE PHOTO
     Route::put('/matrimony-profile/photos/reorder', [MobileProfilePhotoApiController::class, 'reorder']); // REORDER PHOTOS
     Route::get('/matrimony-profile/verification-status', [MobileProfilePhotoApiController::class, 'verificationStatus']); // PROFILE VERIFICATION STATUS
+    Route::get('/matrimony-profile/view-trend', [ProfileViewTrendApiController::class, 'index']); // DAILY DISTINCT VIEWER TREND (DASHBOARD CHART)
     Route::get('/matrimony-profiles', [MatrimonyProfileApiController::class, 'index']); // LIST ALL PROFILES
     Route::get('/matrimony-profiles/more-sections', [MatrimonyProfileApiController::class, 'moreSections']); // MOBILE MORE MATCHES SECTIONS
     Route::get('/matrimony-profiles/{id}', [MatrimonyProfileApiController::class, 'showById']); // GET PROFILE BY ID
