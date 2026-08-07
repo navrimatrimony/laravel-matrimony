@@ -737,7 +737,14 @@ class AdminSettingsController extends Controller
             'dataEngineFixModeDuration' => (string) AdminSetting::getValue('data_engine_fix_mode_duration', 'forever'),
             'dataEngineFixModeExpiresAt' => (string) AdminSetting::getValue('data_engine_fix_mode_expires_at', ''),
             'canManageSiteIdentitySettings' => $viewer?->hasAdminRole(['super_admin']) ?? false,
-            'siteIdentity' => $siteIdentity->all(),
+            // The form edits OVERRIDES, so it must show what the admin actually
+            // stored — never the effective value. Pre-filling a box with a value
+            // inherited from config/legal.php would write that copy into
+            // admin_settings on the next Save and freeze it there, and the fact
+            // would then have two owners again.
+            'siteIdentity' => $siteIdentity->overrides(),
+            // Rendered as placeholder text only: "leave blank and you get this".
+            'siteIdentityEffective' => $siteIdentity->all(),
             'siteIdentityImageUrls' => collect(SiteIdentityService::IMAGE_KEYS)
                 ->mapWithKeys(fn (string $key): array => [$key => $siteIdentity->assetUrl($key)])
                 ->all(),

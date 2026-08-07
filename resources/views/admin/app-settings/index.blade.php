@@ -437,11 +437,11 @@
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-xs mb-1">Tagline / Subtitle</label>
-                        <input type="text" name="site_tagline" value="{{ old('site_tagline', $siteIdentity['site_tagline'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        <input type="text" name="site_tagline" value="{{ old('site_tagline', $siteIdentity['site_tagline'] ?? '') }}" placeholder="{{ $siteIdentityEffective['site_tagline'] ?? '' }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-xs mb-1">Footer copyright text</label>
-                        <input type="text" name="footer_copyright_text" value="{{ old('footer_copyright_text', $siteIdentity['footer_copyright_text'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        <input type="text" name="footer_copyright_text" value="{{ old('footer_copyright_text', $siteIdentity['footer_copyright_text'] ?? '') }}" placeholder="{{ $siteIdentityEffective['footer_copyright_text'] ?? '' }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Use <code>{year}</code> where the current year should appear.</p>
                     </div>
                 </div>
@@ -482,16 +482,22 @@
                 <div>
                     <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Contact & company info</h2>
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">This is the central source for company details, footer contact blocks, social links, and map embed links.</p>
+                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        Leave a box empty to inherit the value shown in grey — those come from <code class="font-mono">config/legal.php</code>, the single place the legal entity name, registered office, public phone and support email are kept. Type here only to override one for display; clearing the box hands it back.
+                    </p>
+                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        Currently published: <span class="font-semibold text-gray-700 dark:text-gray-200">{{ $siteIdentityEffective['legal_name'] ?? '' }}</span> — {{ $siteIdentityEffective['registered_address'] ?? '' }}
+                    </p>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs mb-1">Company name</label>
-                        <input type="text" name="company_name" value="{{ old('company_name', $siteIdentity['company_name'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        <input type="text" name="company_name" value="{{ old('company_name', $siteIdentity['company_name'] ?? '') }}" placeholder="{{ $siteIdentityEffective['company_name'] ?? '' }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
                     </div>
                     <div>
                         <label class="block text-xs mb-1">Support email</label>
-                        <input type="email" name="support_email" value="{{ old('support_email', $siteIdentity['support_email'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        <input type="email" name="support_email" value="{{ old('support_email', $siteIdentity['support_email'] ?? '') }}" placeholder="{{ $siteIdentityEffective['support_email'] ?? '' }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
                     </div>
                     <div>
                         <label class="block text-xs mb-1">Sales email</label>
@@ -503,7 +509,7 @@
                     </div>
                     <div>
                         <label class="block text-xs mb-1">Primary phone</label>
-                        <input type="text" name="primary_phone" value="{{ old('primary_phone', $siteIdentity['primary_phone'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        <input type="text" name="primary_phone" value="{{ old('primary_phone', $siteIdentity['primary_phone'] ?? '') }}" placeholder="{{ $siteIdentityEffective['primary_phone'] ?? '' }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
                     </div>
                     <div>
                         <label class="block text-xs mb-1">Secondary phone</label>
@@ -511,7 +517,8 @@
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-xs mb-1">Address</label>
-                        <textarea name="address" rows="3" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">{{ old('address', $siteIdentity['address'] ?? '') }}</textarea>
+                        <textarea name="address" rows="3" placeholder="{{ $siteIdentityEffective['registered_address'] ?? '' }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">{{ old('address', $siteIdentity['address'] ?? '') }}</textarea>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Empty = the registered office above is published. Anything typed here replaces it on the footer only; the legal pages always show the registered office.</p>
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-xs mb-1">Google Maps embed link</label>

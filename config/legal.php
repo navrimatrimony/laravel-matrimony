@@ -4,23 +4,33 @@
 |--------------------------------------------------------------------------
 | Legal documents — the ONE place to fill in company facts
 |--------------------------------------------------------------------------
-| Every company-specific fact printed on the five public legal pages
-| (terms, privacy, refund, disclaimer, grievance) is resolved from this file
-| and injected into the translated text by App\Support\LegalDocument.
+| Every company-specific fact this product publishes about itself is resolved
+| from this file. Two readers join it to the pages:
+|
+|   App\Support\LegalDocument     -> the six public legal documents, by
+|                                    substituting :tokens into lang/{mr,en}/legal.php
+|   App\Services\SiteIdentityService -> every other surface (homepage footer,
+|                                    public Suchak pages, any new public page)
+|
+| Change a value here once and BOTH readers move — no page repeats it, no view
+| hard-codes it, and there is no manual sweep to do afterwards.
 |
 | A value still written as [[TOKEN]] is an UNFILLED placeholder. It renders
-| literally on the public page, so a missing fact is impossible to overlook.
-| Fill it here once and all five pages pick it up.
+| literally on the legal page (where an admin-only strip flags it), and the
+| Site Identity reader treats it as "no fact yet" so it can never be published
+| as though it were a phone number in a marketing footer.
 |
-| Ownership note (no-duplicate rule, docs/FIELD-OWNERSHIP-MAP.md):
-| brand identity — site name, logo, social links, support/sales/info email,
-| public phone and public address — is already owned by
-| App\Services\SiteIdentityService (DB-backed admin settings). This file does
-| NOT create a second copy of those: App\Support\LegalDocument prefers the
-| admin setting whenever it is filled and falls back to the values below.
-| Facts that exist only for legal documents (legal entity name, LLPIN,
-| registered address, grievance officer, jurisdiction, document versions)
-| are owned here and nowhere else.
+| Ownership rule (no-duplicate rule, docs/FIELD-OWNERSHIP-MAP.md):
+| this file owns the FACTS — legal entity name, LLPIN, statutory registered
+| office, jurisdiction, the public phone and support email, the grievance
+| officer, document versions and the policy windows.
+| App\Services\SiteIdentityService owns BRAND PRESENTATION — site name, logo,
+| tagline, socials, copyright line — and holds an admin OVERRIDE for the
+| display-facing facts (company name, support email, primary phone, display
+| address). An override applies only while it is non-blank; clear it and the
+| value below is published again. `entity.legal_name` and
+| `entity.registered_address` carry no override at all: they are statutory and
+| are read-only through that service by construction.
 |
 | Digits: every numeral written here must be Latin 0-9. Devanagari digits are
 | forbidden product-wide.
@@ -59,9 +69,14 @@ return [
     |--------------------------------------------------------------------------
     | Public contact
     |--------------------------------------------------------------------------
-    | `mobile` is the verified public contact number. `mobile_tel` is the same
-    | number in tel: form. Overridden by SiteIdentityService when the admin has
-    | set a primary phone / support email there.
+    | `mobile` is the verified public contact number and is what the homepage
+    | footer, the legal pages and every other public surface print — they all
+    | read it through App\Services\SiteIdentityService, which falls back here.
+    | `mobile_tel` is the same number in tel: form, used for the href so the
+    | link can never point somewhere other than the number beside it.
+    | An admin may override the displayed phone / support email from
+    | Admin -> App Settings -> Company & Contact; clearing that box restores
+    | these values everywhere at once.
     */
     'contact' => [
         'mobile' => '91284 92284',
