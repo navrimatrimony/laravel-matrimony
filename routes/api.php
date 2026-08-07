@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PasswordResetApiController;
+use App\Http\Controllers\Api\AccountMobileVerificationController;
 use App\Http\Controllers\Api\EducationDegreeSearchController;
 use App\Http\Controllers\Api\GenderLookupController;
 use App\Http\Controllers\Api\LocationController;
@@ -103,6 +104,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/account/email/google', [MobileEmailVerificationController::class, 'verifyGoogle']);
         Route::post('/account/email-otp/send', [MobileEmailVerificationController::class, 'sendOtp']);
         Route::post('/account/email-otp/verify', [MobileEmailVerificationController::class, 'verifyOtp']);
+        Route::post('/account/mobile-otp/send', [AccountMobileVerificationController::class, 'sendOtp']);
+        Route::post('/account/mobile-otp/verify', [AccountMobileVerificationController::class, 'verifyOtp']);
         Route::post('/onboarding/start', [MobileOnboardingController::class, 'start']);
         Route::get('/onboarding/status', [MobileOnboardingController::class, 'status']);
         Route::get('/onboarding/draft', [MobileOnboardingController::class, 'draft']);

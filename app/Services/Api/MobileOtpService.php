@@ -44,6 +44,103 @@ class MobileOtpService
             ]);
         }
 
+        return $this->issueChallenge($mobile, [
+            'purpose' => (string) ($validated['purpose'] ?? 'login_or_register'),
+            'locale' => $this->normalizeLocale($validated['locale'] ?? null),
+            'terms_version' => (string) $validated['terms_version'],
+            'privacy_version' => (string) $validated['privacy_version'],
+            'whatsapp_alerts_opt_in' => array_key_exists('whatsapp_alerts_opt_in', $validated)
+                ? (bool) $validated['whatsapp_alerts_opt_in']
+                : null,
+        ], $request);
+    }
+
+    /**
+     * Issue an OTP challenge for a signed-in member who is claiming a NEW
+     * number for their own account.
+     *
+     * Deliberately NOT a second OTP implementation: it is the same delivery,
+     * the same challenge row, the same limits and the same cooldown as
+     * {@see sendChallenge()} — it only differs in that it records no consent
+     * versions (the member already accepted them) and it refuses up-front a
+     * number that is already on another account.
+     *
+     * @return array{challenge: MobileOtpChallenge, expires_in: int, resend_after: int, delivery_channel: string, debug_otp: string|null}
+     */
+    public function sendPossessionChallenge(User $user, string $mobile, Request $request): array
+    {
+        $mobile = $this->normalizeMobileOrFail($mobile);
+        $this->assertMobileAvailable($user, $mobile);
+
+        $userKey = $this->rateKey('account-mobile-otp-send:user', (string) $user->id);
+        if (RateLimiter::tooManyAttempts($userKey, self::SEND_MOBILE_LIMIT)) {
+            throw new HttpException(429, 'Too many OTP requests for this account.');
+        }
+
+        $result = $this->issueChallenge($mobile, [
+            'purpose' => 'account_mobile_change',
+            'locale' => $this->normalizeLocale($user->preferred_locale ?? null),
+            'terms_version' => null,
+            'privacy_version' => null,
+            'whatsapp_alerts_opt_in' => null,
+        ], $request);
+
+        RateLimiter::hit($userKey, self::SEND_DECAY_SECONDS);
+
+        return $result;
+    }
+
+    /**
+     * Prove the signed-in member holds the number the challenge was sent to,
+     * then — and only then — write it onto their account.
+     *
+     * No session is issued, no user is created, no consent row is written.
+     * The OTP itself is checked by the SAME locked reader the login flow uses.
+     */
+    public function verifyPossession(User $user, string $challengeId, string $otp, Request $request): User
+    {
+        $this->assertVerifyIpLimit($request);
+
+        $result = DB::transaction(function () use ($user, $challengeId, $otp): array {
+            $challenge = MobileOtpChallenge::query()
+                ->where('challenge_id', $challengeId)
+                ->where('purpose', 'account_mobile_change')
+                ->lockForUpdate()
+                ->first();
+
+            $outcome = $this->consumeChallengeOtp($challenge, $otp);
+            if ($outcome !== null) {
+                return $outcome;
+            }
+
+            /** @var MobileOtpChallenge $challenge */
+            $mobile = (string) $challenge->mobile;
+
+            /** @var User $locked */
+            $locked = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $this->assertMobileAvailable($locked, $mobile, true);
+
+            $locked->forceFill([
+                'mobile' => $mobile,
+                'mobile_verified_at' => now(),
+            ])->save();
+
+            return ['user' => $locked->fresh('matrimonyProfile')];
+        });
+
+        $this->throwOtpError($result);
+
+        return $result['user'];
+    }
+
+    /**
+     * The single writer of an OTP challenge row + its delivery.
+     *
+     * @param  array{purpose: string, locale: string|null, terms_version: string|null, privacy_version: string|null, whatsapp_alerts_opt_in: bool|null}  $attributes
+     * @return array{challenge: MobileOtpChallenge, expires_in: int, resend_after: int, delivery_channel: string, debug_otp: string|null}
+     */
+    private function issueChallenge(string $mobile, array $attributes, Request $request): array
+    {
         $this->assertSendLimits($mobile, $request);
         $this->assertCooldownAvailable($mobile);
 
@@ -59,7 +156,7 @@ class MobileOtpService
             'challenge_id' => (string) Str::uuid(),
             'mobile' => $mobile,
             'channel' => $delivery['channel'],
-            'purpose' => (string) ($validated['purpose'] ?? 'login_or_register'),
+            'purpose' => $attributes['purpose'],
             'otp_hash' => Hash::make($otp),
             'attempts' => 0,
             'max_attempts' => self::MAX_ATTEMPTS,
@@ -68,12 +165,10 @@ class MobileOtpService
             'resend_available_at' => $now->copy()->addSeconds(self::RESEND_AFTER_SECONDS),
             'ip_address' => $request->ip(),
             'user_agent' => (string) $request->userAgent(),
-            'locale' => $this->normalizeLocale($validated['locale'] ?? null),
-            'terms_version' => (string) $validated['terms_version'],
-            'privacy_version' => (string) $validated['privacy_version'],
-            'whatsapp_alerts_opt_in' => array_key_exists('whatsapp_alerts_opt_in', $validated)
-                ? (bool) $validated['whatsapp_alerts_opt_in']
-                : null,
+            'locale' => $attributes['locale'],
+            'terms_version' => $attributes['terms_version'],
+            'privacy_version' => $attributes['privacy_version'],
+            'whatsapp_alerts_opt_in' => $attributes['whatsapp_alerts_opt_in'],
         ]);
 
         $this->hitSendLimits($mobile, $request);
@@ -88,6 +183,99 @@ class MobileOtpService
     }
 
     /**
+     * The single OTP checker. Must be called inside a transaction on a row
+     * already locked for update.
+     *
+     * Returns null when the OTP was correct (the challenge is then marked
+     * verified), or an `otp_error` array for the caller to surface.
+     *
+     * @return array{otp_error: string}|null
+     */
+    private function consumeChallengeOtp(?MobileOtpChallenge $challenge, string $otp): ?array
+    {
+        if (! $challenge || $challenge->verified_at !== null) {
+            throw ValidationException::withMessages([
+                'otp' => 'Invalid or expired OTP.',
+            ]);
+        }
+
+        if ($challenge->expires_at === null || $challenge->expires_at->isPast()) {
+            throw ValidationException::withMessages([
+                'otp' => 'Invalid or expired OTP.',
+            ]);
+        }
+
+        if ((int) $challenge->attempts >= (int) $challenge->max_attempts) {
+            throw new HttpException(429, 'OTP attempt limit exceeded.');
+        }
+
+        if (! Hash::check($otp, (string) $challenge->otp_hash)) {
+            $attempts = (int) $challenge->attempts + 1;
+            $challenge->forceFill(['attempts' => $attempts])->save();
+
+            return ['otp_error' => $attempts >= (int) $challenge->max_attempts ? 'limit' : 'invalid'];
+        }
+
+        $challenge->forceFill(['verified_at' => now()])->save();
+
+        return null;
+    }
+
+    private function normalizeMobileOrFail(string $mobile): string
+    {
+        $normalized = MobileNumber::normalize($mobile);
+        if ($normalized === null) {
+            throw ValidationException::withMessages([
+                'mobile' => 'Enter a valid 10 digit mobile number.',
+            ]);
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Mirror of the email service's duplicate guard. `users.mobile` carries a
+     * unique index, so a second account holding it is a hard 409, never a
+     * silent overwrite.
+     */
+    private function assertMobileAvailable(User $user, string $mobile, bool $lock = false): void
+    {
+        $query = User::query()
+            ->whereKeyNot($user->id)
+            ->where('mobile', $mobile);
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        if ($query->exists()) {
+            throw new HttpException(409, 'This mobile number is already used by another account.');
+        }
+    }
+
+    private function assertVerifyIpLimit(Request $request): void
+    {
+        $verifyIpKey = $this->rateKey('mobile-otp-verify:ip', $request->ip() ?? 'unknown');
+        if (RateLimiter::tooManyAttempts($verifyIpKey, self::VERIFY_IP_LIMIT)) {
+            throw new HttpException(429, 'Too many OTP verification attempts.');
+        }
+        RateLimiter::hit($verifyIpKey, self::SEND_DECAY_SECONDS);
+    }
+
+    private function throwOtpError(array $result): void
+    {
+        if (($result['otp_error'] ?? null) === 'limit') {
+            throw new HttpException(429, 'OTP attempt limit exceeded.');
+        }
+
+        if (($result['otp_error'] ?? null) === 'invalid') {
+            throw ValidationException::withMessages([
+                'otp' => 'Invalid or expired OTP.',
+            ]);
+        }
+    }
+
+    /**
      * @return array{user: User, token: string, is_new_account: bool}
      */
     /**
@@ -97,18 +285,9 @@ class MobileOtpService
      */
     public function verifyChallenge(array $validated, Request $request, ?User $actor = null): array
     {
-        $mobile = MobileNumber::normalize((string) ($validated['mobile'] ?? ''));
-        if ($mobile === null) {
-            throw ValidationException::withMessages([
-                'mobile' => 'Enter a valid 10 digit mobile number.',
-            ]);
-        }
+        $mobile = $this->normalizeMobileOrFail((string) ($validated['mobile'] ?? ''));
 
-        $verifyIpKey = $this->rateKey('mobile-otp-verify:ip', $request->ip() ?? 'unknown');
-        if (RateLimiter::tooManyAttempts($verifyIpKey, self::VERIFY_IP_LIMIT)) {
-            throw new HttpException(429, 'Too many OTP verification attempts.');
-        }
-        RateLimiter::hit($verifyIpKey, self::SEND_DECAY_SECONDS);
+        $this->assertVerifyIpLimit($request);
 
         // Whoever is already signed in, if anyone. Passed in rather than read
         // here so the caller decides what counts as authenticated.
@@ -119,39 +298,12 @@ class MobileOtpService
                 ->lockForUpdate()
                 ->first();
 
-            if (! $challenge || $challenge->verified_at !== null) {
-                throw ValidationException::withMessages([
-                    'otp' => 'Invalid or expired OTP.',
-                ]);
+            $outcome = $this->consumeChallengeOtp($challenge, (string) $validated['otp']);
+            if ($outcome !== null) {
+                return $outcome;
             }
 
-            if ($challenge->expires_at === null || $challenge->expires_at->isPast()) {
-                throw ValidationException::withMessages([
-                    'otp' => 'Invalid or expired OTP.',
-                ]);
-            }
-
-            if ((int) $challenge->attempts >= (int) $challenge->max_attempts) {
-                throw new HttpException(429, 'OTP attempt limit exceeded.');
-            }
-
-            if (! Hash::check((string) $validated['otp'], (string) $challenge->otp_hash)) {
-                $attempts = (int) $challenge->attempts + 1;
-                $challenge->forceFill([
-                    'attempts' => $attempts,
-                ])->save();
-
-                if ($attempts >= (int) $challenge->max_attempts) {
-                    return ['otp_error' => 'limit'];
-                }
-
-                return ['otp_error' => 'invalid'];
-            }
-
-            $challenge->forceFill([
-                'verified_at' => now(),
-            ])->save();
-
+            /** @var MobileOtpChallenge $challenge */
             $owner = User::query()
                 ->where('mobile', $mobile)
                 ->lockForUpdate()
@@ -228,15 +380,7 @@ class MobileOtpService
             ];
         });
 
-        if (($result['otp_error'] ?? null) === 'limit') {
-            throw new HttpException(429, 'OTP attempt limit exceeded.');
-        }
-
-        if (($result['otp_error'] ?? null) === 'invalid') {
-            throw ValidationException::withMessages([
-                'otp' => 'Invalid or expired OTP.',
-            ]);
-        }
+        $this->throwOtpError($result);
 
         return $result;
     }
