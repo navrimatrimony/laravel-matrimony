@@ -123,69 +123,10 @@
 
         </main>
 
-        <footer class="bg-zinc-950 px-4 py-10 text-sm text-zinc-400 sm:px-6">
-            <div class="mx-auto grid max-w-6xl gap-8 sm:grid-cols-2 lg:grid-cols-4">
-
-                <div>
-                    <p class="font-devanagari text-lg font-bold text-white">{{ $siteIdentitySettings['company_name'] ?: $siteName }}</p>
-                    @if ($identity['legal_name'] !== '')
-                        <p class="{{ $devanagariClass }} mt-2 text-xs leading-6 text-zinc-500">
-                            {{ __('legal.common.footer_entity', ['entity' => $identity['legal_name']]) }}
-                        </p>
-                    @endif
-                    @if ($identity['registered_address'] !== '')
-                        <p class="mt-3 text-xs leading-6 text-zinc-500">{{ $identity['registered_address'] }}</p>
-                    @endif
-                    @if ($identity['llpin'] !== '')
-                        <p class="mt-2 text-xs leading-6 text-zinc-500">{{ __('public_pages.common.llpin') }}: <span class="font-mono">{{ $identity['llpin'] }}</span></p>
-                    @endif
-                </div>
-
-                <div class="flex flex-col gap-2">
-                    <span class="{{ $devanagariClass }} text-xs font-bold uppercase tracking-wide text-zinc-500">{{ __('homepage.footer_contact') }}</span>
-                    @if ($identity['mobile'] !== '')
-                        <a href="tel:{{ $identity['tel'] }}" class="text-white hover:underline">{{ $identity['mobile'] }}</a>
-                    @endif
-                    @if ($identity['email'] !== '')
-                        <a href="mailto:{{ $identity['email'] }}" class="break-words text-white hover:underline">{{ $identity['email'] }}</a>
-                    @endif
-                    @if ($identity['hours'] !== '')
-                        <span class="text-xs leading-6 text-zinc-500">{{ $identity['hours'] }}</span>
-                    @endif
-                </div>
-
-                <div class="flex flex-col gap-2">
-                    <span class="{{ $devanagariClass }} text-xs font-bold uppercase tracking-wide text-zinc-500">{{ __('public_pages.common.pages') }}</span>
-                    @foreach ($publicPageLinks as $footerLink)
-                        <a href="{{ $footerLink['url'] }}" class="{{ $devanagariClass }} text-white hover:underline">{{ $footerLink['label'] }}</a>
-                    @endforeach
-                    @if (Route::has('login'))
-                        <a href="{{ route('login') }}" class="{{ $devanagariClass }} text-white hover:underline">{{ __('homepage.login') }}</a>
-                    @endif
-                    @if (Route::has('register'))
-                        <a href="{{ route('register') }}" class="{{ $devanagariClass }} text-white hover:underline">{{ __('homepage.register') }}</a>
-                    @endif
-                </div>
-
-                <div class="flex flex-col gap-2">
-                    <span class="{{ $devanagariClass }} text-xs font-bold uppercase tracking-wide text-zinc-500">{{ __('homepage.footer_legal') }}</span>
-                    @foreach ($legalLinks as $legalLink)
-                        <a href="{{ $legalLink['url'] }}" class="{{ $devanagariClass }} text-white hover:underline">{{ $legalLink['label'] }}</a>
-                    @endforeach
-                </div>
-            </div>
-
-            @if (! empty($socialLinks))
-                <div class="mx-auto mt-8 flex max-w-6xl flex-wrap gap-4 text-xs">
-                    @foreach ($socialLinks as $socialLabel => $socialUrl)
-                        <a href="{{ $socialUrl }}" target="_blank" rel="noopener noreferrer" class="text-white hover:underline">{{ $socialLabel }}</a>
-                    @endforeach
-                </div>
-            @endif
-
-            <div class="mx-auto mt-8 max-w-6xl border-t border-zinc-800 pt-6 text-xs text-zinc-600">
-                {{ $siteIdentity->copyrightText() }}
-            </div>
-        </footer>
+        {{-- One footer for the whole site. This shell used to hand-build its
+             own, which is how three visually different footers ended up on one
+             domain — a visitor saw a different company block on the homepage,
+             the pricing page and a legal page. --}}
+        @include('layouts.site-footer')
     </body>
 </html>

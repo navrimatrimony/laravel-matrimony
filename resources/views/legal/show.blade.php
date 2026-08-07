@@ -157,19 +157,10 @@
             @endif
         </main>
 
-        <footer class="bg-zinc-950 px-4 py-8 text-sm text-zinc-400 sm:px-6">
-            <div class="mx-auto max-w-4xl">
-                <p class="font-devanagari text-base font-bold text-white">{{ $siteIdentitySettings['company_name'] ?: $siteName }}</p>
-                <p class="{{ $devanagariClass }} mt-2 text-xs leading-6 text-zinc-500">{{ __('legal.common.footer_entity', ['entity' => config('legal.entity.legal_name')]) }}</p>
-                <div class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs">
-                    @foreach ($legalLinks as $link)
-                        <a href="{{ $link['url'] }}" class="{{ $devanagariClass }} text-white hover:underline">{{ $link['label'] }}</a>
-                    @endforeach
-                </div>
-                <div class="mt-6 border-t border-zinc-800 pt-5 text-xs text-zinc-600">
-                    {{ $siteIdentity->copyrightText() }}
-                </div>
-            </div>
-        </footer>
+        {{-- The same footer every other public page renders. The legal pages
+             used to carry a thinner hand-built one with no address, phone or
+             email — the very details a payment reviewer opens these pages to
+             find. --}}
+        @include('layouts.site-footer')
     </body>
 </html>
