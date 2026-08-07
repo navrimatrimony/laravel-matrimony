@@ -228,9 +228,11 @@ class MobilePlanApiController extends Controller
             'is_current' => $this->isCurrentPlanForUser($user, $plan),
             'default_plan_term_id' => $defaultTerm instanceof PlanTerm ? (int) $defaultTerm->id : null,
             'terms' => $visibleTerms
-                ->map(fn (PlanTerm $term): array => $this->termPayload($term))
+                ->map(fn (PlanTerm $term): array => $this->termPayload($plan, $term))
                 ->values()
                 ->all(),
+            // Plan-level features stay default-term lines for backward compatibility.
+            // Term-specific final lines (SSOT) live on each terms[].features — clients must display those.
             'features' => $this->catalogFeatureLines($plan, $defaultTerm),
         ];
     }
@@ -302,7 +304,7 @@ class MobilePlanApiController extends Controller
         return $visibleTerms->first();
     }
 
-    private function termPayload(PlanTerm $term): array
+    private function termPayload(Plan $plan, PlanTerm $term): array
     {
         $selling = round((float) $term->final_price, 2);
 
@@ -321,6 +323,8 @@ class MobilePlanApiController extends Controller
                 (string) $term->billing_key,
                 (int) $term->duration_days
             ),
+            // Final catalog lines for this term only — Flutter must not re-multiply.
+            'features' => $this->catalogFeatureLines($plan, $term),
         ];
     }
 
