@@ -53,33 +53,10 @@ class HomepageSettingsController extends Controller
         $sectionKeys = array_keys($defaults['sections']);
         $searchFieldKeys = array_keys($defaults['search_fields']);
 
+        // Homepage prose is no longer posted here — it lives in
+        // lang/{mr,en}/homepage.php and is overridable through Admin ->
+        // Translations. Section order is fixed in HomepageContentService.
         $request->validate([
-            'hero_badge_mr' => ['nullable', 'string', 'max:180'],
-            'hero_badge_en' => ['nullable', 'string', 'max:180'],
-            'hero_title_mr' => ['required', 'string', 'max:220'],
-            'hero_title_en' => ['required', 'string', 'max:220'],
-            'hero_subtitle_mr' => ['nullable', 'string', 'max:500'],
-            'hero_subtitle_en' => ['nullable', 'string', 'max:500'],
-            'primary_cta_mr' => ['required', 'string', 'max:80'],
-            'primary_cta_en' => ['required', 'string', 'max:80'],
-            'secondary_cta_mr' => ['required', 'string', 'max:80'],
-            'secondary_cta_en' => ['required', 'string', 'max:80'],
-            'assisted_title_mr' => ['nullable', 'string', 'max:160'],
-            'assisted_title_en' => ['nullable', 'string', 'max:160'],
-            'assisted_body_mr' => ['nullable', 'string', 'max:700'],
-            'assisted_body_en' => ['nullable', 'string', 'max:700'],
-            'success_title_mr' => ['nullable', 'string', 'max:160'],
-            'success_title_en' => ['nullable', 'string', 'max:160'],
-            'success_intro_mr' => ['nullable', 'string', 'max:500'],
-            'success_intro_en' => ['nullable', 'string', 'max:500'],
-            'final_cta_title_mr' => ['nullable', 'string', 'max:180'],
-            'final_cta_title_en' => ['nullable', 'string', 'max:180'],
-            'final_cta_body_mr' => ['nullable', 'string', 'max:500'],
-            'final_cta_body_en' => ['nullable', 'string', 'max:500'],
-            'app_title_mr' => ['nullable', 'string', 'max:160'],
-            'app_title_en' => ['nullable', 'string', 'max:160'],
-            'app_body_mr' => ['nullable', 'string', 'max:500'],
-            'app_body_en' => ['nullable', 'string', 'max:500'],
             'app_android_url' => ['nullable', 'url', 'max:500'],
             'app_ios_url' => ['nullable', 'url', 'max:500'],
             'hero_search_age_control' => ['required', Rule::in(['inputs', 'slider'])],
@@ -87,14 +64,14 @@ class HomepageSettingsController extends Controller
             'hero_search_location_mode' => ['required', Rule::in(['none', 'state', 'state_district'])],
             'section_enabled' => ['array'],
             'section_enabled.*' => ['string', Rule::in($sectionKeys)],
-            'section_sort_order' => ['array'],
-            'section_sort_order.*' => ['nullable', 'integer', 'min:1', 'max:999'],
             'search_fields' => ['array'],
             'search_fields.*' => ['string', Rule::in($searchFieldKeys)],
         ]);
 
         $current = $this->homepageContent->settings();
-        $preserveKeys = array_merge(['sections', 'search_fields'], $this->homepageContent->storiesDisplayKeys());
+        // story_limit has no form control; carry the stored value through so a
+        // save does not quietly reset it.
+        $preserveKeys = ['sections', 'search_fields', 'story_limit'];
 
         $settings = [];
         foreach (array_keys($defaults) as $key) {
@@ -104,10 +81,7 @@ class HomepageSettingsController extends Controller
             $settings[$key] = $request->input($key, $defaults[$key]);
         }
 
-        foreach ($this->homepageContent->storiesDisplayKeys() as $key) {
-            $settings[$key] = $current[$key] ?? $defaults[$key];
-        }
-
+        $settings['story_limit'] = $current['story_limit'] ?? $defaults['story_limit'];
         $settings['app_show_android'] = $request->boolean('app_show_android');
         $settings['app_show_ios'] = $request->boolean('app_show_ios');
 
@@ -115,7 +89,6 @@ class HomepageSettingsController extends Controller
         foreach ($sectionKeys as $key) {
             $settings['sections'][$key] = [
                 'enabled' => in_array($key, $enabledSections, true),
-                'sort_order' => max(1, min(999, (int) $request->input("section_sort_order.{$key}", $defaults['sections'][$key]['sort_order']))),
             ];
         }
 
@@ -131,7 +104,7 @@ class HomepageSettingsController extends Controller
             'update_homepage_settings',
             'AdminSetting',
             null,
-            'Homepage bilingual content, section visibility, ordering, and search fields updated.',
+            'Homepage section visibility, app store links, and search fields updated.',
             false
         );
 
@@ -139,45 +112,20 @@ class HomepageSettingsController extends Controller
             ->with('success', 'Homepage settings updated.');
     }
 
+    /**
+     * Retired. The success-story slider knobs it wrote were readable by the
+     * homepage and writable by this route, but their only form lived in a
+     * partial that was never included anywhere — configuration that looked
+     * live and was not. The values are now constants in the homepage view.
+     *
+     * Kept as a harmless redirect because the route that points at it lives in
+     * routes/web/admin.php, which this change does not own. Delete this method
+     * and that route line together.
+     */
     public function updateStoriesDisplay(Request $request): RedirectResponse
     {
-        $request->validate([
-            'story_limit' => ['required', 'integer', 'min:1', 'max:24'],
-            'success_stories_display' => ['required', Rule::in(['grid', 'slider'])],
-            'success_stories_autoplay_seconds' => ['required', 'integer', 'min:2', 'max:30'],
-            'success_stories_slides_mobile' => ['required', 'integer', 'min:1', 'max:2'],
-            'success_stories_slides_tablet' => ['required', 'integer', 'min:1', 'max:3'],
-            'success_stories_slides_desktop' => ['required', 'integer', 'min:1', 'max:4'],
-        ]);
-
-        $input = $request->only([
-            'story_limit',
-            'success_stories_display',
-            'success_stories_autoplay_seconds',
-            'success_stories_slides_mobile',
-            'success_stories_slides_tablet',
-            'success_stories_slides_desktop',
-        ]);
-        $input['success_stories_autoplay'] = $request->boolean('success_stories_autoplay');
-        $input['success_stories_show_arrows'] = $request->boolean('success_stories_show_arrows');
-        $input['success_stories_show_dots'] = $request->boolean('success_stories_show_dots');
-        $input['success_stories_pause_on_hover'] = $request->boolean('success_stories_pause_on_hover');
-        $input['success_stories_loop'] = $request->boolean('success_stories_loop');
-
-        $settings = array_merge($this->homepageContent->settings(), $this->homepageContent->normalizeStoriesDisplayInput($input));
-        $this->homepageContent->save($settings);
-
-        AuditLogService::log(
-            $request->user(),
-            'update_homepage_success_stories_display',
-            'AdminSetting',
-            null,
-            'Homepage success stories display and slider settings updated.',
-            false
-        );
-
         return redirect()->route('admin.homepage-settings.index', ['tab' => 'stories'])
-            ->with('success', 'Success stories display settings saved.');
+            ->with('success', 'Success story display settings are no longer configurable.');
     }
 
     public function storeImage(Request $request): RedirectResponse

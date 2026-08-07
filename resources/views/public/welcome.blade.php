@@ -92,6 +92,25 @@
                 line-height: 1.55;
                 color: #3f3434;
             }
+            /* What is free, what is paid, and where the prices are — the three
+               things a stranger needs before anything else on this page. */
+            .nmn-hero-pricing {
+                margin-top: 14px;
+                max-width: 620px;
+                border: 1px solid #f0caca;
+                border-radius: 10px;
+                background: rgba(255,255,255,.88);
+                padding: 10px 14px;
+                font-size: 14px;
+                line-height: 1.6;
+                font-weight: 600;
+                color: #3b3030;
+            }
+            .nmn-hero-pricing a {
+                color: var(--brand-red);
+                font-weight: 800;
+                text-decoration: underline;
+            }
             .nmn-hero-actions {
                 display: flex;
                 flex-wrap: wrap;
@@ -742,40 +761,51 @@
             $heroPath = ! empty($homepageImages['hero'] ?? null) ? $homepageImages['hero'] : 'images/matrimonial-hero.jpg';
             $assistedPath = $homepageImages['assisted_service'] ?? null;
             $appPath = $homepageImages['app_section'] ?? null;
-            $successStoriesDisplay = ($homepageSettings['success_stories_display'] ?? 'slider') === 'slider' ? 'slider' : 'grid';
-            $successStoriesAutoplay = filter_var($homepageSettings['success_stories_autoplay'] ?? true, FILTER_VALIDATE_BOOLEAN);
-            $successStoriesAutoplayMs = max(2000, (int) ($homepageSettings['success_stories_autoplay_seconds'] ?? 5) * 1000);
-            $successStoriesSlidesMobile = max(1, min(2, (int) ($homepageSettings['success_stories_slides_mobile'] ?? 1)));
-            $successStoriesSlidesTablet = max(1, min(3, (int) ($homepageSettings['success_stories_slides_tablet'] ?? 2)));
-            $successStoriesSlidesDesktop = max(1, min(4, (int) ($homepageSettings['success_stories_slides_desktop'] ?? 3)));
-            $successStoriesShowArrows = filter_var($homepageSettings['success_stories_show_arrows'] ?? true, FILTER_VALIDATE_BOOLEAN);
-            $successStoriesShowDots = filter_var($homepageSettings['success_stories_show_dots'] ?? true, FILTER_VALIDATE_BOOLEAN);
-            $successStoriesPauseOnHover = filter_var($homepageSettings['success_stories_pause_on_hover'] ?? true, FILTER_VALIDATE_BOOLEAN);
-            $successStoriesLoop = filter_var($homepageSettings['success_stories_loop'] ?? true, FILTER_VALIDATE_BOOLEAN);
+            // Success-story slider mechanics. These were eleven admin settings
+            // whose only form lived in a partial that was never included, so
+            // every site has been seeing exactly these values. They are page
+            // design, not configuration — held here so a stale saved row can no
+            // longer change them.
+            $successStoriesDisplay = 'slider';
+            $successStoriesAutoplay = true;
+            $successStoriesAutoplayMs = 5000;
+            $successStoriesSlidesMobile = 1;
+            $successStoriesSlidesTablet = 2;
+            $successStoriesSlidesDesktop = 3;
+            $successStoriesShowArrows = true;
+            $successStoriesShowDots = true;
+            $successStoriesPauseOnHover = true;
+            $successStoriesLoop = true;
             $retailPath = $homepageImages['retail_outlet'] ?? null;
-            $sectionEnabled = fn (string $key): bool => (bool) data_get($homepageSettings, "sections.$key.enabled", true);
-            $sectionOrder = collect($homepageSettings['sections'] ?? [])->map(fn ($section, $key) => ['key' => $key, 'sort_order' => (int) ($section['sort_order'] ?? 50)])->sortBy('sort_order')->pluck('key')->all();
+            // Pricing has no off switch — see HomepageContentService::ALWAYS_VISIBLE_SECTIONS.
+            // Reading the saved flag for it is what let the homepage ship with
+            // every price hidden.
+            $sectionEnabled = fn (string $key): bool => in_array($key, \App\Services\Admin\HomepageContentService::ALWAYS_VISIBLE_SECTIONS, true)
+                || (bool) data_get($homepageSettings, "sections.$key.enabled", true);
+            // Order is an editorial decision held in code, not a number an admin
+            // can nudge. Reading it from the settings blob is what allowed a
+            // stray sort value to reorder the page under a visitor.
+            $sectionOrder = \App\Services\Admin\HomepageContentService::SECTION_ORDER;
             $searchEnabled = fn (string $key): bool => (bool) data_get($homepageSettings, "search_fields.$key", true);
             $isMarathiLocale = \App\Support\LocalizedText::isMarathiLoose();
             $devanagariClass = $isMarathiLocale ? 'font-devanagari' : '';
-            $localized = fn (string $key, string $fallbackMr, string $fallbackEn): string => (string) (
-                $isMarathiLocale
-                    ? ($homepageSettings[$key.'_mr'] ?? $fallbackMr)
-                    : ($homepageSettings[$key.'_en'] ?? $fallbackEn)
-            );
-            $heroBadge = $localized('hero_badge', 'विश्वासू मराठी विवाहस्थळ', 'Trusted Marathi Matrimony');
-            $heroTitle = $localized('hero_title', 'योग्य मराठी जोडीदार शोधा', 'Find your trusted Marathi match');
-            $heroSubtitle = $localized('hero_subtitle', 'कुटुंबाच्या सहभागाने, सुरक्षित संपर्क आणि व्यवस्थित प्रोफाइलसह गंभीर विवाहासाठी योग्य स्थळ शोधा.', 'Search serious profiles with privacy, family-first trust, and a guided matchmaking flow.');
-            $primaryCta = $localized('primary_cta', 'नोंदणी करा', 'Register free');
-            $secondaryCta = $localized('secondary_cta', 'स्थळ शोधा', 'Search profiles');
-            $assistedTitle = $localized('assisted_title', 'सहाय्यक सेवा', 'Assisted Service');
-            $assistedBody = $localized('assisted_body', 'कुटुंबांना प्रोफाइल, पसंती आणि संवाद यामध्ये संयमी मदत.', 'Support for families that want a guided, matrimony-focused experience.');
-            $successTitle = $localized('success_title', 'यशोगाथा', 'Success Stories');
-            $successIntro = $localized('success_intro', 'विश्वासाने सुरू झालेला संवाद आयुष्यभराच्या नात्यात बदलला.', 'Real stories can be featured here with consent and admin approval.');
-            $finalCtaTitle = $localized('final_cta_title', 'योग्य जोडीदाराचा शोध सुरू करा', 'Ready to explore matches?');
-            $finalCtaBody = $localized('final_cta_body', 'प्रोफाइल तयार करा किंवा उपलब्ध स्थळे शोधा.', 'Create your profile or open the search flow with the same filters used inside the platform.');
-            $appTitle = $localized('app_title', 'मोबाइल अ‍ॅप', 'Download our mobile app');
-            $appBody = $localized('app_body', 'Android आणि iOS वर शोध, interests आणि संवाद सोपे ठेवा.', 'Search profiles, manage interests, and chat on Android and iOS.');
+            // Every homepage sentence comes from lang/{mr,en}/homepage.php — one
+            // owner, reviewable in git, overridable per deployment through the
+            // Translations screen. There is no admin prose editor behind these
+            // any more, and no second copy of the wording in this file.
+            $heroBadge = __('homepage.hero_badge');
+            $heroTitle = __('homepage.hero_title');
+            $heroSubtitle = __('homepage.hero_subtitle');
+            $primaryCta = __('homepage.hero_primary_cta');
+            $secondaryCta = __('homepage.hero_secondary_cta');
+            $assistedTitle = __('homepage.assisted_title');
+            $assistedBody = __('homepage.assisted_body');
+            $successTitle = __('homepage.success_title');
+            $successIntro = __('homepage.success_intro');
+            $finalCtaTitle = __('homepage.final_cta_title');
+            $finalCtaBody = __('homepage.final_cta_body');
+            $appTitle = __('homepage.app_title');
+            $appBody = __('homepage.app_body');
             $appAndroidUrl = trim((string) ($homepageSettings['app_android_url'] ?? ''));
             $appIosUrl = trim((string) ($homepageSettings['app_ios_url'] ?? ''));
             $appShowAndroid = filter_var($homepageSettings['app_show_android'] ?? true, FILTER_VALIDATE_BOOLEAN) && $appAndroidUrl !== '';
@@ -786,22 +816,32 @@
                 __('homepage.trust_privacy'),
                 __('homepage.trust_family'),
             ];
-            $howStepNumbers = $isMarathiLocale ? ['१', '२', '३', '४'] : ['1', '2', '3', '4'];
-            $ageControl = in_array(($homepageSettings['hero_search_age_control'] ?? 'inputs'), ['inputs', 'slider'], true)
+            // Latin digits 0-9 in both languages — frozen workspace rule. A
+            // Marathi reader still reads 1, 2, 3, 4.
+            $howStepNumbers = ['1', '2', '3', '4'];
+            $ageControl = in_array(($homepageSettings['hero_search_age_control'] ?? 'slider'), ['inputs', 'slider'], true)
                 ? $homepageSettings['hero_search_age_control']
-                : 'inputs';
+                : 'slider';
             $communityMode = in_array(($homepageSettings['hero_search_community_mode'] ?? 'caste'), ['none', 'caste', 'religion_caste'], true)
                 ? $homepageSettings['hero_search_community_mode']
                 : 'caste';
             $locationMode = in_array(($homepageSettings['hero_search_location_mode'] ?? 'state_district'), ['none', 'state', 'state_district'], true)
                 ? $homepageSettings['hero_search_location_mode']
                 : 'state_district';
-            $showReligion = $communityMode === 'religion_caste' && $searchEnabled('religion');
-            $showCaste = in_array($communityMode, ['caste', 'religion_caste'], true) && $searchEnabled('caste');
-            $showState = in_array($locationMode, ['state', 'state_district'], true) && $searchEnabled('state');
-            $showDistrict = $locationMode === 'state_district' && $searchEnabled('district');
+            // One field, one owner. Religion and caste answer only to the
+            // community mode, state and district only to the location mode —
+            // previously each also had to pass a search_fields checkbox, so two
+            // controls had to agree before a dropdown appeared.
+            $showReligion = $communityMode === 'religion_caste';
+            $showCaste = in_array($communityMode, ['caste', 'religion_caste'], true);
+            $showState = in_array($locationMode, ['state', 'state_district'], true);
+            $showDistrict = $locationMode === 'state_district';
             $ageFromValue = max(18, min(80, (int) request('age_from', 18)));
             $ageToValue = max($ageFromValue, min(80, (int) request('age_to', 35)));
+            // Pricing is what a stranger — and a payment-gateway reviewer —
+            // comes here to find. Resolved once so the hero can point at it and
+            // the plans block can render it.
+            $plansSectionVisible = $sectionEnabled('plans') && $homepagePlans->isNotEmpty();
         @endphp
 
         <header class="sticky top-0 z-30 border-b border-red-100/80 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
@@ -857,6 +897,13 @@
 
                             <h1 class="nmn-hero-title {{ $devanagariClass }}">{{ $heroTitle }}</h1>
                             <p class="nmn-hero-subtitle {{ $devanagariClass }}">{{ $heroSubtitle }}</p>
+
+                            <p class="nmn-hero-pricing {{ $devanagariClass }}">
+                                {{ __('homepage.hero_pricing_note') }}
+                                @if ($plansSectionVisible)
+                                    <a href="#plans">{{ __('homepage.hero_pricing_link') }}</a>
+                                @endif
+                            </p>
 
                             <div class="nmn-hero-actions">
                                 @guest
@@ -992,9 +1039,9 @@
 
                             @if ($showState)
                                 <div class="nmn-field">
-                                    <label for="welcome-search-state">{{ __('search.state') }}</label>
+                                    <label for="welcome-search-state">{{ __('homepage.state') }}</label>
                                     <select id="welcome-search-state" name="state_id">
-                                        <option value="">{{ __('search.any') }}</option>
+                                        <option value="">{{ __('homepage.any') }}</option>
                                         @foreach ($addressStates as $st)
                                             <option value="{{ $st->id }}" @selected((string) request('state_id') === (string) $st->id)>{{ $st->name }}</option>
                                         @endforeach
@@ -1004,9 +1051,9 @@
 
                             @if ($showDistrict)
                                 <div class="nmn-field">
-                                    <label for="welcome-search-district">{{ __('search.district') }}</label>
+                                    <label for="welcome-search-district">{{ __('homepage.district') }}</label>
                                     <select id="welcome-search-district" name="district_id">
-                                        <option value="">{{ __('search.any') }}</option>
+                                        <option value="">{{ __('homepage.any') }}</option>
                                         @foreach ($addressDistricts as $d)
                                             <option value="{{ $d->id }}" @selected((string) request('district_id') === (string) $d->id)>{{ $d->name }}</option>
                                         @endforeach
@@ -1179,25 +1226,65 @@
                 @endif
 
                 @if ($sectionKey === 'plans' && $homepagePlans->isNotEmpty())
-                    <section class="border-y border-zinc-200 bg-white px-4 py-12 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6">
+                    @php
+                        // Stated only when every card on screen actually carries
+                        // the flag, so the claim is bound to the data instead of
+                        // being a sentence somebody typed once.
+                        $plansAllGstInclusive = $homepagePlans->every(fn ($plan) => (bool) $plan->gst_inclusive);
+                    @endphp
+                    <section id="plans" class="border-y border-zinc-200 bg-white px-4 py-12 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6">
                         <div class="mx-auto max-w-7xl">
-                            <div class="mb-6">
+                            <div class="mb-6 max-w-3xl">
                                 <h2 class="{{ $devanagariClass }} text-2xl font-extrabold text-zinc-950 dark:text-white">{{ __('homepage.plans_title') }}</h2>
-                                <p class="text-sm font-bold text-[var(--brand-red)]">{{ __('homepage.plans_subtitle') }}</p>
+                                <p class="{{ $devanagariClass }} mt-2 text-sm leading-7 text-zinc-700 dark:text-zinc-300">{{ __('homepage.plans_subtitle') }}</p>
+                                <p class="{{ $devanagariClass }} mt-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                                    {{ __('homepage.plans_currency_note') }}@if ($plansAllGstInclusive) {{ __('homepage.plans_gst_note') }}@endif
+                                </p>
                             </div>
                             <div class="grid gap-4 md:grid-cols-3">
                                 @foreach ($homepagePlans as $plan)
-                                    <div class="rounded-lg border {{ $plan->highlight ? 'border-red-300' : 'border-zinc-200' }} bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900">
+                                    @php
+                                        // MRP vs payable: plans.price is the list
+                                        // price, plans.selling_price (via
+                                        // final_price) is what the member is
+                                        // actually charged. Publishing the MRP as
+                                        // "the price" overstated Gold by 4x.
+                                        $planMrp = (float) $plan->price;
+                                        $planPayable = (float) $plan->final_price;
+                                        $planSavePercent = \App\Support\PlanPricing::displayDiscountPercent($planMrp, $planPayable);
+                                        $planBillingKey = trim((string) ($plan->default_billing_key ?? ''));
+                                        $planDurationDays = $planBillingKey !== ''
+                                            ? \App\Models\PlanTerm::durationDaysFor($planBillingKey)
+                                            : null;
+                                    @endphp
+                                    <div class="flex flex-col rounded-lg border {{ $plan->highlight ? 'border-red-300' : 'border-zinc-200' }} bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900">
                                         @if ($plan->highlight)
-                                            <span class="rounded-full bg-red-100 px-2 py-1 text-[11px] font-bold text-[var(--brand-red)]">{{ __('homepage.popular') }}</span>
+                                            <span class="{{ $devanagariClass }} self-start rounded-full bg-red-100 px-2 py-1 text-[11px] font-bold text-[var(--brand-red)] dark:bg-red-950/50">{{ __('homepage.popular') }}</span>
                                         @endif
                                         <h3 class="{{ $devanagariClass }} mt-3 text-lg font-extrabold text-zinc-950 dark:text-white">{{ $plan->localizedName() }}</h3>
-                                        <p class="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{{ $plan->description }}</p>
-                                        <p class="mt-4 text-2xl font-extrabold text-[var(--brand-red)]">₹{{ number_format((float) $plan->price, 0) }}</p>
+                                        @if (filled($plan->description))
+                                            <p class="{{ $devanagariClass }} mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{{ $plan->description }}</p>
+                                        @endif
+                                        <div class="mt-4 flex flex-wrap items-baseline gap-x-2">
+                                            @if ($planPayable > 0)
+                                                <span class="text-2xl font-extrabold text-[var(--brand-red)]">{{ \App\Support\MoneyFormat::amount($planPayable) }}</span>
+                                                @if ($planDurationDays !== null)
+                                                    <x-plan.duration-label :days="$planDurationDays" class="{{ $devanagariClass }} text-sm font-semibold text-zinc-600 dark:text-zinc-400" />
+                                                @endif
+                                            @else
+                                                <span class="{{ $devanagariClass }} text-2xl font-extrabold text-[var(--brand-red)]">{{ __('homepage.plans_free') }}</span>
+                                            @endif
+                                        </div>
+                                        @if ($planSavePercent > 0)
+                                            <p class="{{ $devanagariClass }} mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                                <span class="line-through">{{ __('homepage.plans_mrp_label') }} {{ \App\Support\MoneyFormat::amount($planMrp) }}</span>
+                                                <span class="ml-1 font-bold text-emerald-700 dark:text-emerald-400">{{ __('homepage.plans_save', ['percent' => $planSavePercent]) }}</span>
+                                            </p>
+                                        @endif
                                     </div>
                                 @endforeach
                             </div>
-                            <a href="{{ route('plans.index') }}" class="mt-5 inline-flex items-center gap-2 rounded-md border border-red-200 px-4 py-2 text-sm font-bold text-[var(--brand-red)] hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/40">
+                            <a href="{{ route('plans.index') }}" class="{{ $devanagariClass }} mt-5 inline-flex items-center gap-2 rounded-md border border-red-200 px-4 py-2 text-sm font-bold text-[var(--brand-red)] hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/40">
                                 <svg class="homepage-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 15h19.5M10.5 3.75v16.5m3-16.5v16.5" /></svg>
                                 {{ __('homepage.view_plans') }}
                             </a>
