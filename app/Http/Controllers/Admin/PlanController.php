@@ -29,14 +29,12 @@ class PlanController extends Controller
         'recommended',
     ];
 
-    /** Plan-wide duration preset (subset of billing keys; excludes custom-only paths). */
+    /** Plan-wide duration preset: product periods only (1 / 3 / 6 / 12 months). */
     public const ADMIN_PLAN_DURATION_PRESET_KEYS = [
         PlanTerm::BILLING_MONTHLY,
         PlanTerm::BILLING_QUARTERLY,
         PlanTerm::BILLING_HALF_YEARLY,
         PlanTerm::BILLING_YEARLY,
-        PlanTerm::BILLING_FIVE_YEARLY,
-        PlanTerm::BILLING_LIFETIME,
     ];
 
     /** Admin plan form: grace period (days); 0 = none (no extra days after paid window). */
@@ -305,12 +303,12 @@ class PlanController extends Controller
     {
         $request->validate([
             'term_rows' => ['required', 'array', 'min:1'],
-            'term_rows.*.billing_key' => ['required', 'string', Rule::in(PlanTerm::presetBillingKeys())],
+            'term_rows.*.billing_key' => ['required', 'string', Rule::in(PlanTerm::productBillingKeys())],
             'term_rows.*.price' => ['required', 'numeric', 'integer', 'gt:0'],
             'term_rows.*.selling_price' => ['required', 'numeric', 'integer', 'min:0'],
             'term_rows.*.quota_bonus_percent' => ['nullable', 'integer', 'min:0', 'max:100'],
             'term_rows.*.is_visible' => ['nullable'],
-            'default_billing_key' => ['required', 'string', Rule::in(PlanTerm::presetBillingKeys())],
+            'default_billing_key' => ['required', 'string', Rule::in(PlanTerm::productBillingKeys())],
         ]);
 
         $keys = collect($request->input('term_rows', []))
@@ -368,7 +366,7 @@ class PlanController extends Controller
                 continue;
             }
             $key = (string) ($row['billing_key'] ?? '');
-            if ($key === '') {
+            if ($key === '' || ! in_array($key, PlanTerm::productBillingKeys(), true)) {
                 continue;
             }
             $price = \App\Support\PlanPricing::normalizeMoney($row['price'] ?? 0);
@@ -395,7 +393,9 @@ class PlanController extends Controller
     }
 
     /**
-     * Prevent replacing terms when submitted rows are effectively unchanged.
+     * True when a sync would be a no-op: each submitted row already matches DB,
+     * and every DB term omitted from the form is already hidden (Phase 1 upsert).
+     * Hidden legacy keys (five_yearly / lifetime) must not force a false mismatch.
      */
     private function matchesPersistedTermRows(Plan $plan, array $rows): bool
     {
@@ -409,23 +409,33 @@ class PlanController extends Controller
                     'is_visible' => (bool) ($row['is_visible'] ?? false),
                 ],
             ])
+            ->filter(fn ($_, $key) => $key !== '')
             ->all();
 
-        $persisted = $plan->terms
-            ->mapWithKeys(fn (PlanTerm $term) => [
-                (string) $term->billing_key => [
-                    'price' => round((float) $term->price, 2),
-                    'selling_price' => round((float) $term->final_price, 2),
-                    'quota_bonus_percent' => (int) ($term->quota_bonus_percent ?? 0),
-                    'is_visible' => (bool) $term->is_visible,
-                ],
-            ])
-            ->all();
+        foreach ($requested as $key => $attrs) {
+            $term = $plan->terms->firstWhere('billing_key', $key);
+            if ($term === null) {
+                return false;
+            }
+            $persisted = [
+                'price' => round((float) $term->price, 2),
+                'selling_price' => round((float) $term->final_price, 2),
+                'quota_bonus_percent' => (int) ($term->quota_bonus_percent ?? 0),
+                'is_visible' => (bool) $term->is_visible,
+            ];
+            if ($persisted !== $attrs) {
+                return false;
+            }
+        }
 
-        ksort($requested);
-        ksort($persisted);
+        foreach ($plan->terms as $term) {
+            $key = (string) $term->billing_key;
+            if (! isset($requested[$key]) && (bool) $term->is_visible) {
+                return false;
+            }
+        }
 
-        return $requested === $persisted;
+        return true;
     }
 
     /**
@@ -453,11 +463,11 @@ class PlanController extends Controller
     {
         $explicit = trim((string) $request->input('default_billing_key', ''));
         if ($explicit !== '') {
-            return in_array($explicit, PlanTerm::presetBillingKeys(), true) ? $explicit : null;
+            return in_array($explicit, PlanTerm::productBillingKeys(), true) ? $explicit : null;
         }
 
         $durationPreset = trim((string) $request->input('duration_preset', ''));
-        if ($durationPreset !== '' && in_array($durationPreset, PlanTerm::presetBillingKeys(), true)) {
+        if ($durationPreset !== '' && in_array($durationPreset, PlanTerm::productBillingKeys(), true)) {
             return $durationPreset;
         }
 
@@ -563,7 +573,7 @@ class PlanController extends Controller
         $durationDays = (int) ($validated['duration_days'] ?? 0);
         if (! $isFreeSystemPlan) {
             $preset = (string) $request->input('duration_preset', '');
-            if (in_array($preset, PlanTerm::presetBillingKeys(), true)) {
+            if (in_array($preset, PlanTerm::productBillingKeys(), true)) {
                 $durationDays = PlanTerm::durationDaysFor($preset);
             }
         }
@@ -1080,21 +1090,26 @@ class PlanController extends Controller
         // Prefer persisted billing intent over legacy duration_days fallback.
         $plan->loadMissing('terms');
 
+        $productKeys = PlanTerm::productBillingKeys();
         $defaultBilling = strtolower(trim((string) ($plan->default_billing_key ?? '')));
-        if ($defaultBilling !== '' && in_array($defaultBilling, PlanTerm::presetBillingKeys(), true)) {
+        if ($defaultBilling !== '' && in_array($defaultBilling, $productKeys, true)) {
             return $defaultBilling;
         }
 
         $visibleTerm = $plan->terms
             ->where('is_visible', true)
+            ->filter(fn (PlanTerm $t) => in_array((string) $t->billing_key, $productKeys, true))
             ->sortBy('sort_order')
             ->first();
-        if ($visibleTerm && in_array((string) $visibleTerm->billing_key, PlanTerm::presetBillingKeys(), true)) {
+        if ($visibleTerm) {
             return (string) $visibleTerm->billing_key;
         }
 
-        $firstTerm = $plan->terms->sortBy('sort_order')->first();
-        if ($firstTerm && in_array((string) $firstTerm->billing_key, PlanTerm::presetBillingKeys(), true)) {
+        $firstTerm = $plan->terms
+            ->filter(fn (PlanTerm $t) => in_array((string) $t->billing_key, $productKeys, true))
+            ->sortBy('sort_order')
+            ->first();
+        if ($firstTerm) {
             return (string) $firstTerm->billing_key;
         }
 
@@ -1126,14 +1141,25 @@ class PlanController extends Controller
 
         if ($isEdit && $plan->exists) {
             $plan->loadMissing('terms');
+            $productKeys = array_flip(PlanTerm::productBillingKeys());
 
-            return $plan->terms->sortBy('sort_order')->values()->map(fn (PlanTerm $t) => [
-                'billing_key' => $t->billing_key,
-                'price' => (float) $t->price,
-                'selling_price' => (float) $t->final_price,
-                'quota_bonus_percent' => (int) ($t->quota_bonus_percent ?? 0),
-                'is_visible' => (bool) $t->is_visible,
-            ])->all();
+            // Only visible product periods (1/3/6/12). Hidden legacy five_yearly / lifetime
+            // must not reappear in the form and get re-posted on save.
+            $rows = $plan->terms
+                ->filter(fn (PlanTerm $t) => (bool) $t->is_visible && isset($productKeys[(string) $t->billing_key]))
+                ->sortBy('sort_order')
+                ->values()
+                ->map(fn (PlanTerm $t) => [
+                    'billing_key' => $t->billing_key,
+                    'price' => (float) $t->price,
+                    'selling_price' => (float) $t->final_price,
+                    'quota_bonus_percent' => (int) ($t->quota_bonus_percent ?? 0),
+                    'is_visible' => true,
+                ])->all();
+
+            if ($rows !== []) {
+                return $rows;
+            }
         }
 
         $p = (float) ($plan->price ?? 0);

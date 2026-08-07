@@ -74,17 +74,32 @@ class PlanTerm extends Model
     }
 
     /**
-     * All catalog billing keys (coupons, validation). Legacy alias kept as {@see billingKeys()}.
+     * Product catalog billing keys only: 1 / 3 / 6 / 12 months.
+     * Admin plan forms and default seeders use this set — not five_yearly / lifetime.
      *
      * @return list<string>
      */
-    public static function presetBillingKeys(): array
+    public static function productBillingKeys(): array
     {
         return [
             self::BILLING_MONTHLY,
             self::BILLING_QUARTERLY,
             self::BILLING_HALF_YEARLY,
             self::BILLING_YEARLY,
+        ];
+    }
+
+    /**
+     * All known billing keys (coupons, legacy rows, duration helpers).
+     * Includes five_yearly / lifetime for BC only — do not invent these on admin save.
+     * Legacy alias kept as {@see billingKeys()}.
+     *
+     * @return list<string>
+     */
+    public static function presetBillingKeys(): array
+    {
+        return [
+            ...self::productBillingKeys(),
             self::BILLING_FIVE_YEARLY,
             self::BILLING_LIFETIME,
         ];
@@ -253,7 +268,8 @@ class PlanTerm extends Model
         $seen = [];
         foreach ($rows as $index => $row) {
             $key = (string) ($row['billing_key'] ?? '');
-            if ($key === '' || ! in_array($key, self::presetBillingKeys(), true)) {
+            // Only product periods (1/3/6/12 mo). Never invent five_yearly / lifetime / empty keys.
+            if ($key === '' || ! in_array($key, self::productBillingKeys(), true)) {
                 continue;
             }
             if (isset($seen[$key])) {

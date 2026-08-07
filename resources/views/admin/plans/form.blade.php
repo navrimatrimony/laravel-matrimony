@@ -25,7 +25,7 @@
     @endif
 
     @php
-        $presetKeys = \App\Models\PlanTerm::presetBillingKeys();
+        $presetKeys = \App\Models\PlanTerm::productBillingKeys();
         $hasValidationErrors = session()->has('errors');
         // Create retry: flash old input. Edit + validation failure: reload term_rows / default tab from old().
         $allowOldInput = $hasValidationErrors && ! $isEdit;
