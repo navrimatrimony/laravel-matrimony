@@ -12,14 +12,14 @@ use App\Services\SubscriptionService;
 use App\Support\PlanFeatureKeys;
 use App\Support\PlanQuotaPolicyKeys;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Resets catalog plans to gendered tiers: free/basic/silver/gold × male/female.
+ * Upserts catalog plans to gendered tiers: free/basic/silver/gold × male/female.
  *
  * Quota + pricing SSOT matches the approved local catalog (male values; female identical).
- * Do NOT run this seeder on production with live subscriptions — it deletes all plans/subs.
+ * Safe for production: does not delete subscriptions or payment history. Catalog slugs are
+ * updateOrCreate'd; any other plan rows are hidden ({@code is_active=0}, {@code is_visible=0}).
  */
 class SubscriptionPlansSeeder extends Seeder
 {
@@ -333,37 +333,57 @@ class SubscriptionPlansSeeder extends Seeder
 
     private static function syncTerms(Plan $plan, string $tier): void
     {
-        PlanTerm::query()->where('plan_id', $plan->id)->delete();
         if (Plan::isFreeCatalogSlug((string) $plan->slug)) {
+            PlanTerm::query()->where('plan_id', $plan->id)->delete();
+
             return;
         }
 
+        $keepIds = [];
         foreach (self::tierTerms($tier) as $term) {
-            PlanTerm::query()->create([
-                'plan_id' => $plan->id,
-                'billing_key' => $term['billing_key'],
-                'duration_days' => $term['duration_days'],
-                'price' => $term['price'],
-                'selling_price' => $term['selling_price'],
-                'discount_percent' => null,
-                'quota_bonus_percent' => $term['quota_bonus_percent'],
-                'is_visible' => $term['is_visible'],
-                'sort_order' => PlanTerm::defaultSortOrder($term['billing_key']),
-            ]);
+            $row = PlanTerm::query()->updateOrCreate(
+                [
+                    'plan_id' => $plan->id,
+                    'billing_key' => $term['billing_key'],
+                ],
+                [
+                    'duration_days' => $term['duration_days'],
+                    'price' => $term['price'],
+                    'selling_price' => $term['selling_price'],
+                    'discount_percent' => null,
+                    'quota_bonus_percent' => $term['quota_bonus_percent'],
+                    'is_visible' => $term['is_visible'],
+                    'sort_order' => PlanTerm::defaultSortOrder($term['billing_key']),
+                ],
+            );
+            $keepIds[] = (int) $row->id;
         }
+
+        PlanTerm::query()
+            ->where('plan_id', $plan->id)
+            ->when($keepIds !== [], fn ($q) => $q->whereNotIn('id', $keepIds))
+            ->delete();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function catalogSlugs(): array
+    {
+        $slugs = [];
+        foreach (['male', 'female'] as $gender) {
+            foreach (['free', 'basic', 'silver', 'gold'] as $tier) {
+                $slugs[] = $tier.'_'.$gender;
+            }
+        }
+
+        return $slugs;
     }
 
     public function run(): void
     {
-        if (Schema::hasTable('subscriptions')) {
-            DB::table('subscriptions')->delete();
-        }
-
-        foreach (Plan::query()->cursor() as $existing) {
-            $existing->delete();
-        }
-
         $quotas = self::tierQuotaPolicies();
+        $catalogSlugs = self::catalogSlugs();
 
         foreach (['male', 'female'] as $gender) {
             foreach (['free', 'basic', 'silver', 'gold'] as $tier) {
@@ -376,10 +396,10 @@ class SubscriptionPlansSeeder extends Seeder
                     default => 0,
                 };
 
+                $slug = $tier.'_'.$gender;
                 $row = [
                     'name' => ucfirst($tier).' ('.ucfirst($gender).')',
                     'name_mr' => self::catalogPlanNameMr($tier, $gender),
-                    'slug' => $tier.'_'.$gender,
                     'applies_to_gender' => $gender,
                     'price' => $attrs['price'],
                     'selling_price' => $attrs['selling_price'],
@@ -400,12 +420,22 @@ class SubscriptionPlansSeeder extends Seeder
                     unset($row['name_mr']);
                 }
 
-                $plan = Plan::query()->create($row);
+                $plan = Plan::query()->updateOrCreate(['slug' => $slug], $row);
                 self::syncQuotaPolicies($plan, $quotas[$tier]);
                 self::syncMirroredAndExtraFeatures($plan->fresh(['quotaPolicies']), $tier);
                 self::syncTerms($plan, $tier);
                 $plan->forgetCachedPlanFeatures();
             }
         }
+
+        Plan::query()
+            ->whereNotIn('slug', $catalogSlugs)
+            ->update([
+                'is_active' => false,
+                'is_visible' => false,
+                'updated_at' => now(),
+            ]);
+
+        Plan::flushDefaultFreeMemo();
     }
 }
