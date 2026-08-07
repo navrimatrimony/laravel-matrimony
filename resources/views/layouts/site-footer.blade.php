@@ -165,10 +165,18 @@
     <div class="h-px w-full bg-gradient-to-r from-transparent via-red-800/70 to-transparent" aria-hidden="true"></div>
 
     <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:py-14">
-        <div class="grid gap-10 md:grid-cols-2 lg:grid-cols-12 lg:gap-8">
+        {{-- Four equal columns on desktop, two on tablet, one on a phone.
+
+             This used to be a 12-track grid with lg:col-span-4/3/2/3 children.
+             Those utilities are not in the compiled stylesheet, so on a wide
+             screen every column fell back to one track of twelve: the whole
+             footer crushed into the left third and left two thirds of black
+             empty. Equal columns need no span classes at all, so there is
+             nothing here that can go missing again. --}}
+        <div class="grid gap-10 md:grid-cols-2 lg:grid-cols-4 lg:gap-8">
 
             {{-- Identity --}}
-            <div class="lg:col-span-4">
+            <div>
                 <p class="{{ $footerDevanagari }} text-lg font-bold tracking-tight text-white">{{ $footerBrandName }}</p>
 
                 @if ($footerLegalName !== '' && $footerLegalName !== $footerBrandName)
@@ -200,7 +208,7 @@
             </div>
 
             {{-- Contact --}}
-            <div class="lg:col-span-3">
+            <div>
                 <h2 class="{{ $footerDevanagari }} text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">{{ __('homepage.footer_contact') }}</h2>
                 <span class="mt-2 block h-0.5 w-8 rounded-full bg-red-800/80" aria-hidden="true"></span>
 
@@ -260,7 +268,7 @@
             </div>
 
             {{-- Company --}}
-            <div class="lg:col-span-2">
+            <div>
                 <h2 class="{{ $footerDevanagari }} text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">{{ __('footer.company') }}</h2>
                 <span class="mt-2 block h-0.5 w-8 rounded-full bg-red-800/80" aria-hidden="true"></span>
 
@@ -274,7 +282,7 @@
             </div>
 
             {{-- Legal --}}
-            <div class="lg:col-span-3">
+            <div>
                 <h2 class="{{ $footerDevanagari }} text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">{{ __('homepage.footer_legal') }}</h2>
                 <span class="mt-2 block h-0.5 w-8 rounded-full bg-red-800/80" aria-hidden="true"></span>
 
