@@ -3,6 +3,7 @@
 namespace App\Services\Onboarding;
 
 use App\Models\ConflictRecord;
+use Illuminate\Support\Carbon;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Models\MobileOnboardingDraft;
@@ -56,6 +57,65 @@ class ActivationChecklistService
         ];
     }
 
+    /**
+     * The ONE thing standing between this member and being findable, named.
+     *
+     * The checklist has ten rows and seven of them can block. Handing all ten
+     * to a member is how nobody does anything: the app used to open a generic
+     * "edit profile" list of twelve sections and leave them to guess which one
+     * mattered. So this returns the first blocking row that is not done, in the
+     * order a member can actually act on them, and says whether it is theirs to
+     * fix or ours.
+     *
+     * `action` is what the app routes to. `waiting_on_us` rows still carry one
+     * where a member has a way out: a photo held in review is unblocked by
+     * uploading a different photo, and never by waiting.
+     *
+     * @return array{key: string, label: string, message: string, action: string, actionable_by_member: bool}|null
+     */
+    public function topBlocker(User $user, ?MatrimonyProfile $profile = null, ?MobileOnboardingDraft $draft = null): ?array
+    {
+        $profile ??= $user->matrimonyProfile;
+
+        if ($this->isSearchable($user, $profile)) {
+            return null;
+        }
+
+        $items = collect($this->items($user, $profile, $draft))->keyBy('key');
+
+        foreach (self::BLOCKER_ORDER as $key => $meta) {
+            $item = $items->get($key);
+            if (! is_array($item) || ($item['complete'] ?? false) === true) {
+                continue;
+            }
+
+            return [
+                'key' => $key,
+                'label' => (string) ($item['label'] ?? $key),
+                'message' => (string) ($item['message'] ?? ''),
+                'action' => $meta['action'],
+                'actionable_by_member' => $meta['actionable_by_member'],
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Blocking rows in the order a member meets them, each with the screen the
+     * app should open. Photo approval is deliberately actionable: the review is
+     * automatic, so a held photo is answered by sending another one.
+     */
+    private const BLOCKER_ORDER = [
+        'mobile_verified' => ['action' => 'verify_mobile', 'actionable_by_member' => true],
+        'account_details_complete' => ['action' => 'account_details', 'actionable_by_member' => true],
+        'required_fields_complete' => ['action' => 'complete_profile', 'actionable_by_member' => true],
+        'location_valid' => ['action' => 'set_location', 'actionable_by_member' => true],
+        'photo_uploaded' => ['action' => 'upload_photo', 'actionable_by_member' => true],
+        'photo_approved' => ['action' => 'upload_photo', 'actionable_by_member' => true],
+        'governance_clear' => ['action' => 'wait', 'actionable_by_member' => false],
+    ];
+
     public function isSearchable(User $user, ?MatrimonyProfile $profile = null): bool
     {
         $profile ??= $user->matrimonyProfile;
@@ -70,6 +130,38 @@ class ActivationChecklistService
             && $this->photoUploaded($profile)
             && $this->photoApproved($profile)
             && $this->governanceClear($profile);
+    }
+
+    /**
+     * When the current wait started, for the blockers where a member is owed an
+     * answer rather than asked for one. Null when nothing is pending on us —
+     * "since" on a step the member simply has not done yet would read as a
+     * complaint about them.
+     */
+    public function waitingSince(?MatrimonyProfile $profile, string $blockerKey): ?string
+    {
+        if (! $profile instanceof MatrimonyProfile) {
+            return null;
+        }
+
+        if ($blockerKey === 'governance_clear' && Schema::hasTable('conflict_records')) {
+            $since = ConflictRecord::query()
+                ->where('profile_id', $profile->id)
+                ->where('resolution_status', 'PENDING')
+                ->min('created_at');
+
+            return $since !== null ? Carbon::parse($since)->toISOString() : null;
+        }
+
+        if ($blockerKey === 'photo_approved' && $this->photoUploaded($profile) && Schema::hasTable('profile_photos')) {
+            $since = ProfilePhoto::query()
+                ->where('profile_id', $profile->id)
+                ->min('created_at');
+
+            return $since !== null ? Carbon::parse($since)->toISOString() : null;
+        }
+
+        return null;
     }
 
     public function profileSummary(?MatrimonyProfile $profile, ?User $user = null, ?MobileOnboardingDraft $draft = null): ?array

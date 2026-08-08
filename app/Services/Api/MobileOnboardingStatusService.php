@@ -37,6 +37,14 @@ class MobileOnboardingStatusService
         $items = $this->checklistService->items($user, $profile, $draft);
         $nextStep = $this->nextStep($draft, $profile);
 
+        // The one thing keeping this member out of search, named, so the app can
+        // say it in a sentence and open the right screen instead of handing over
+        // a ten-row checklist and a generic edit page.
+        $topBlocker = $this->checklistService->topBlocker($user, $profile, $draft);
+        if ($topBlocker !== null) {
+            $topBlocker['waiting_since'] = $this->checklistService->waitingSince($profile, $topBlocker['key']);
+        }
+
         return [
             'success' => true,
             'account' => $this->accountPayload($user),
@@ -46,6 +54,7 @@ class MobileOnboardingStatusService
             'has_existing_profile' => $profile instanceof MatrimonyProfile,
             'profile_status' => $this->checklistService->profileStatus($profile),
             'is_searchable' => $this->checklistService->isSearchable($user, $profile),
+            'top_blocker' => $topBlocker,
             'next_step' => $nextStep,
             'pending_location' => $this->checklistService->pendingLocationPayload($draft),
             'account_state' => $this->otpService->accountStateFor($user),
