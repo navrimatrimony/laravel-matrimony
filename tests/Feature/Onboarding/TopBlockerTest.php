@@ -53,18 +53,85 @@ class TopBlockerTest extends TestCase
         $this->assertTrue($blocker['actionable_by_member']);
     }
 
-    public function test_a_missing_name_is_named_once_the_mobile_is_done(): void
+    public function test_a_missing_creator_name_is_never_named_as_the_reason(): void
     {
+        // It is blocking on the checklist and NOT a search gate. Naming it sent
+        // a member off to add a creator name that changes nothing about why
+        // nobody can find them.
         $user = $this->member(['name' => '']);
         $profile = MatrimonyProfile::factory()->create([
             'user_id' => $user->id,
             'lifecycle_state' => 'draft',
         ]);
 
-        $blocker = $this->checklist->topBlocker($user, $profile);
+        $keys = array_column($this->checklist->blockerQueue($user, $profile), 'key');
 
-        $this->assertSame('account_details_complete', $blocker['key']);
-        $this->assertSame('account_details', $blocker['action']);
+        $this->assertNotContains('account_details_complete', $keys);
+    }
+
+    public function test_the_queue_is_ranked_and_the_top_blocker_is_its_first_entry(): void
+    {
+        $user = $this->member(['mobile_verified_at' => null]);
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'lifecycle_state' => 'draft',
+        ]);
+
+        $queue = $this->checklist->blockerQueue($user, $profile);
+        $top = $this->checklist->topBlocker($user, $profile);
+
+        $this->assertNotEmpty($queue);
+        $this->assertSame($queue[0]['key'], $top['key']);
+        // Structurally impossible for the two to disagree — that is the point.
+        $this->assertSame('mobile_verified', $queue[0]['key']);
+    }
+
+    public function test_progress_counts_the_same_gates_the_queue_ranks(): void
+    {
+        $user = $this->member(['mobile_verified_at' => null]);
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'lifecycle_state' => 'draft',
+        ]);
+
+        $progress = $this->checklist->activationProgress($user, $profile);
+        $outstanding = count($this->checklist->blockerQueue($user, $profile));
+
+        $this->assertSame(7, $progress['total']);
+        // The bar can never fill while something is still in the way.
+        $this->assertSame($progress['total'] - $progress['done'], $outstanding);
+    }
+
+    public function test_the_missing_mandatory_fields_are_named_not_just_counted(): void
+    {
+        $user = $this->member();
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'lifecycle_state' => 'draft',
+        ]);
+
+        $row = collect($this->checklist->items($user, $profile))
+            ->firstWhere('key', 'required_fields_complete');
+
+        $this->assertIsArray($row['missing_fields']);
+        $this->assertNotEmpty(
+            $row['missing_fields'],
+            'A member told only that "required fields are missing" has eleven sections to guess between.'
+        );
+    }
+
+    public function test_a_searchable_member_has_an_empty_queue_and_a_full_bar(): void
+    {
+        $user = $this->member();
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'lifecycle_state' => 'draft',
+        ]);
+
+        // Not searchable here, so the queue is not empty...
+        $this->assertNotEmpty($this->checklist->blockerQueue($user, $profile));
+        $progress = $this->checklist->activationProgress($user, $profile);
+        $this->assertLessThan($progress['total'], $progress['done']);
     }
 
     public function test_only_one_blocker_is_ever_returned(): void

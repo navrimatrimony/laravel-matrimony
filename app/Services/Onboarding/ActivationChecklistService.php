@@ -11,6 +11,7 @@ use App\Models\ProfilePhoto;
 use App\Models\User;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
+use App\Services\ProfileCompletenessService;
 use App\Services\ProfileLifecycleService;
 use App\Services\RuleEngineService;
 use Illuminate\Support\Facades\Schema;
@@ -47,7 +48,20 @@ class ActivationChecklistService
             $this->item('mobile_verified', 'Mobile verified', $mobileVerified, true, $mobileVerified ? 'complete' : 'missing', $mobileVerified ? 'Mobile verified' : 'Verify mobile number'),
             $this->item('account_details_complete', 'Account details complete', $accountComplete, true, $accountComplete ? 'complete' : 'missing', $accountComplete ? 'Creator name added' : 'Add creator name'),
             $this->item('email_added_optional', 'Email added', $emailPresent && $emailVerified, false, $emailPresent ? ($emailVerified ? 'complete' : 'unverified') : 'optional', $emailPresent ? ($emailVerified ? 'Email verified' : 'Email unverified; optional') : 'Email is optional'),
-            $this->item('required_fields_complete', 'Required fields complete', $requiredComplete, true, $requiredComplete ? 'complete' : 'missing', $requiredComplete ? 'Required profile fields complete' : 'Required profile fields are missing'),
+            $this->item(
+                'required_fields_complete',
+                'Required fields complete',
+                $requiredComplete,
+                true,
+                $requiredComplete ? 'complete' : 'missing',
+                $requiredComplete ? 'Required profile fields complete' : 'Required profile fields are missing',
+                // Named, not counted. "Required fields are missing" sends a
+                // member into eleven sections to guess which; the names send
+                // them to one.
+                ($requiredComplete || ! $profile instanceof MatrimonyProfile)
+                    ? []
+                    : ProfileCompletenessService::missingMandatoryFields($profile),
+            ),
             $this->item('location_valid', 'Location valid', $locationValid, true, $locationStatus, $locationMessage),
             $this->item('photo_uploaded', 'Photo uploaded', $photoUploaded, true, $photoUploaded ? 'complete' : 'missing', $photoUploaded ? 'Photo uploaded' : 'Upload profile photo'),
             $this->item('photo_approved', 'Photo approved', $photoApproved, true, $photoApproved ? 'complete' : ($photoUploaded ? 'pending' : 'missing'), $photoApproved ? 'Photo approved' : ($photoUploaded ? 'Photo approval pending' : 'Upload a photo for approval')),
@@ -58,62 +72,120 @@ class ActivationChecklistService
     }
 
     /**
-     * The ONE thing standing between this member and being findable, named.
+     * Everything standing between this member and being findable, in the order
+     * they meet it — first entry is the one to act on now.
      *
-     * The checklist has ten rows and seven of them can block. Handing all ten
-     * to a member is how nobody does anything: the app used to open a generic
-     * "edit profile" list of twelve sections and leave them to guess which one
-     * mattered. So this returns the first blocking row that is not done, in the
-     * order a member can actually act on them, and says whether it is theirs to
-     * fix or ours.
+     * ONE loop, and the only ranking of blockers that exists. The app used to
+     * keep its own, which is how a screen came to say "complete your profile"
+     * while the ring beside it circled the photo button.
      *
-     * `action` is what the app routes to. `waiting_on_us` rows still carry one
-     * where a member has a way out: a photo held in review is unblocked by
-     * uploading a different photo, and never by waiting.
+     * The rows here are exactly the gates {@see isSearchable()} applies, no
+     * more: `account_details_complete` is blocking on the checklist but is NOT
+     * a search gate, and naming it would send a member to add a creator name
+     * that changes nothing about why they cannot be found.
      *
-     * @return array{key: string, label: string, message: string, action: string, actionable_by_member: bool}|null
+     * @param  list<array<string, mixed>>|null  $items  reuse an already-built checklist
+     * @return list<array{key: string, label: string, message: string, action: string, actionable_by_member: bool}>
      */
-    public function topBlocker(User $user, ?MatrimonyProfile $profile = null, ?MobileOnboardingDraft $draft = null): ?array
-    {
+    public function blockerQueue(
+        User $user,
+        ?MatrimonyProfile $profile = null,
+        ?MobileOnboardingDraft $draft = null,
+        ?array $items = null
+    ): array {
         $profile ??= $user->matrimonyProfile;
 
         if ($this->isSearchable($user, $profile)) {
-            return null;
+            return [];
         }
 
-        $items = collect($this->items($user, $profile, $draft))->keyBy('key');
+        $rows = collect($items ?? $this->items($user, $profile, $draft))->keyBy('key');
+        $queue = [];
 
         foreach (self::BLOCKER_ORDER as $key => $meta) {
-            $item = $items->get($key);
-            if (! is_array($item) || ($item['complete'] ?? false) === true) {
+            $row = $rows->get($key);
+            if (! is_array($row) || ($row['complete'] ?? false) === true) {
                 continue;
             }
 
-            return [
+            $queue[] = [
                 'key' => $key,
-                'label' => (string) ($item['label'] ?? $key),
-                'message' => (string) ($item['message'] ?? ''),
+                'label' => (string) ($row['label'] ?? $key),
+                'message' => (string) ($row['message'] ?? ''),
                 'action' => $meta['action'],
                 'actionable_by_member' => $meta['actionable_by_member'],
+                'missing_fields' => array_values((array) ($row['missing_fields'] ?? [])),
             ];
         }
 
-        return null;
+        return $queue;
     }
 
     /**
-     * Blocking rows in the order a member meets them, each with the screen the
-     * app should open. Photo approval is deliberately actionable: the review is
-     * automatic, so a held photo is answered by sending another one.
+     * The ONE thing to do next, or null when nothing is in the way.
+     *
+     * @return array{key: string, label: string, message: string, action: string, actionable_by_member: bool}|null
+     */
+    public function topBlocker(
+        User $user,
+        ?MatrimonyProfile $profile = null,
+        ?MobileOnboardingDraft $draft = null,
+        ?array $items = null
+    ): ?array {
+        return $this->blockerQueue($user, $profile, $draft, $items)[0] ?? null;
+    }
+
+    /**
+     * How far along the member is, as a pair they can be shown: "5 of 7 done".
+     *
+     * Counted over the SAME rows blockerQueue ranks, so the bar can never fill
+     * while a blocker remains, and can never stall while none does.
+     *
+     * @param  list<array<string, mixed>>|null  $items
+     * @return array{done: int, total: int}
+     */
+    public function activationProgress(
+        User $user,
+        ?MatrimonyProfile $profile = null,
+        ?MobileOnboardingDraft $draft = null,
+        ?array $items = null
+    ): array {
+        $profile ??= $user->matrimonyProfile;
+        $rows = collect($items ?? $this->items($user, $profile, $draft))->keyBy('key');
+
+        $total = 0;
+        $done = 0;
+        foreach (array_keys(self::BLOCKER_ORDER) as $key) {
+            $row = $rows->get($key);
+            if (! is_array($row)) {
+                continue;
+            }
+            $total++;
+            if (($row['complete'] ?? false) === true) {
+                $done++;
+            }
+        }
+
+        return ['done' => $done, 'total' => $total];
+    }
+
+    /**
+     * The gates a member must pass to be findable, in the order they meet them,
+     * each with the screen that resolves it.
+     *
+     * Photo approval is deliberately actionable: review is automatic, so a held
+     * photo is answered by sending another one and never by waiting on a human.
+     * `profile_active` and `governance_clear` are the only two that genuinely
+     * are not the member's to clear.
      */
     private const BLOCKER_ORDER = [
         'mobile_verified' => ['action' => 'verify_mobile', 'actionable_by_member' => true],
-        'account_details_complete' => ['action' => 'account_details', 'actionable_by_member' => true],
         'required_fields_complete' => ['action' => 'complete_profile', 'actionable_by_member' => true],
         'location_valid' => ['action' => 'set_location', 'actionable_by_member' => true],
         'photo_uploaded' => ['action' => 'upload_photo', 'actionable_by_member' => true],
         'photo_approved' => ['action' => 'upload_photo', 'actionable_by_member' => true],
         'governance_clear' => ['action' => 'wait', 'actionable_by_member' => false],
+        'profile_active' => ['action' => 'wait', 'actionable_by_member' => false],
     ];
 
     public function isSearchable(User $user, ?MatrimonyProfile $profile = null): bool
@@ -301,8 +373,18 @@ class ActivationChecklistService
             ->exists();
     }
 
-    private function item(string $key, string $label, bool $complete, bool $blocking, string $status, string $message): array
-    {
+    /**
+     * @param  list<string>  $missingFields  named only where the row can name them
+     */
+    private function item(
+        string $key,
+        string $label,
+        bool $complete,
+        bool $blocking,
+        string $status,
+        string $message,
+        array $missingFields = []
+    ): array {
         return [
             'key' => $key,
             'label' => $label,
@@ -310,6 +392,7 @@ class ActivationChecklistService
             'blocking' => $blocking,
             'status' => $status,
             'message' => $message,
+            'missing_fields' => $missingFields,
         ];
     }
 }

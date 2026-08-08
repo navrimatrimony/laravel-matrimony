@@ -37,13 +37,19 @@ class MobileOnboardingStatusService
         $items = $this->checklistService->items($user, $profile, $draft);
         $nextStep = $this->nextStep($draft, $profile);
 
-        // The one thing keeping this member out of search, named, so the app can
-        // say it in a sentence and open the right screen instead of handing over
-        // a ten-row checklist and a generic edit page.
-        $topBlocker = $this->checklistService->topBlocker($user, $profile, $draft);
-        if ($topBlocker !== null) {
-            $topBlocker['waiting_since'] = $this->checklistService->waitingSince($profile, $topBlocker['key']);
-        }
+        // Everything keeping this member out of search, ranked, so the app can
+        // name the one to do now, list what follows, and draw a bar — instead of
+        // handing over a ten-row checklist and a generic edit page. The already
+        // built $items is passed down so the checklist is computed once.
+        $blockers = $this->checklistService->blockerQueue($user, $profile, $draft, $items);
+        $blockers = array_map(function (array $blocker) use ($profile): array {
+            $blocker['waiting_since'] = $this->checklistService->waitingSince($profile, $blocker['key']);
+
+            return $blocker;
+        }, $blockers);
+
+        $topBlocker = $blockers[0] ?? null;
+        $remainingBlockers = array_slice($blockers, 1);
 
         return [
             'success' => true,
@@ -55,6 +61,8 @@ class MobileOnboardingStatusService
             'profile_status' => $this->checklistService->profileStatus($profile),
             'is_searchable' => $this->checklistService->isSearchable($user, $profile),
             'top_blocker' => $topBlocker,
+            'remaining_blockers' => $remainingBlockers,
+            'activation_progress' => $this->checklistService->activationProgress($user, $profile, $draft, $items),
             'next_step' => $nextStep,
             'pending_location' => $this->checklistService->pendingLocationPayload($draft),
             'account_state' => $this->otpService->accountStateFor($user),

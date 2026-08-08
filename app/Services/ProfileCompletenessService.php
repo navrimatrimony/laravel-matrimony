@@ -56,6 +56,35 @@ class ProfileCompletenessService
     }
 
     /**
+     * Which mandatory fields this profile has not answered, by key.
+     *
+     * The same loop {@see percentage()} runs, kept here rather than in a caller
+     * so that "what is missing" and "how complete is it" can never disagree.
+     * The member app needs the names: told only that "required fields are
+     * missing", a member is left to open eleven sections and guess, which is
+     * how people fill the loudest red section — none of which gate anything —
+     * and stay invisible anyway.
+     *
+     * @return list<string>
+     */
+    public static function missingMandatoryFields(MatrimonyProfile $profile): array
+    {
+        $enabledMandatoryFields = array_intersect(
+            ProfileFieldConfigurationService::getMandatoryFieldKeys(),
+            ProfileFieldConfigurationService::getEnabledFieldKeys()
+        );
+
+        $missing = [];
+        foreach ($enabledMandatoryFields as $fieldKey) {
+            if (! self::isFieldFilled($profile, $fieldKey)) {
+                $missing[] = $fieldKey;
+            }
+        }
+
+        return array_values($missing);
+    }
+
+    /**
      * Check if a specific field is filled for a profile.
      */
     private static function isFieldFilled(MatrimonyProfile $profile, string $fieldKey): bool
