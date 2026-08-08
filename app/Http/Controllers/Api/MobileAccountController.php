@@ -17,12 +17,22 @@ class MobileAccountController extends Controller
 {
     public function update(Request $request, MobileOtpService $otpService, MemberPasswordService $passwords): JsonResponse
     {
+        /*
+        | `email` is prohibited here on purpose. An address only reaches
+        | users.email once its holder has proved possession, and the single
+        | place that proof is checked is MobileEmailVerificationService —
+        | reached through /account/email-otp/verify or /account/email/google.
+        | `prohibited` still allows a null or empty value, so clients that
+        | send the key without a value keep working unchanged.
+        */
         $validated = $request->validate([
             'creator_name' => ['required', 'string', 'max:255'],
-            'email' => ['nullable', 'string', 'email', 'max:255'],
+            'email' => ['prohibited'],
             'locale' => ['nullable', 'string', Rule::in(['mr', 'en'])],
             'password' => ['nullable', 'confirmed', Rules\Password::defaults()],
             'whatsapp_alerts_opt_in' => ['nullable', 'boolean'],
+        ], [
+            'email.prohibited' => 'Email can only be changed by verifying it. Use the email OTP or Google verification flow.',
         ]);
 
         /** @var User $user */
@@ -34,46 +44,6 @@ class MobileAccountController extends Controller
 
         if (array_key_exists('locale', $validated)) {
             $updates['preferred_locale'] = $validated['locale'];
-        }
-
-        if ($request->has('email')) {
-            $email = $validated['email'] ?? null;
-            $email = $email !== null ? Str::lower(trim((string) $email)) : null;
-
-            if ($email === null || $email === '') {
-                if ($user->email_verified_at !== null && filled($user->email)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Verified email cannot be cleared.',
-                        'errors' => [
-                            'email' => ['Verified email cannot be cleared.'],
-                        ],
-                    ], 422);
-                }
-
-                $updates['email'] = null;
-                $updates['email_verified_at'] = null;
-            } else {
-                $exists = User::query()
-                    ->whereKeyNot($user->id)
-                    ->whereRaw('LOWER(email) = ?', [$email])
-                    ->exists();
-
-                if ($exists) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Email belongs to another account.',
-                        'errors' => [
-                            'email' => ['Email belongs to another account.'],
-                        ],
-                    ], 409);
-                }
-
-                if ($email !== Str::lower((string) ($user->email ?? ''))) {
-                    $updates['email_verified_at'] = null;
-                }
-                $updates['email'] = $email;
-            }
         }
 
         $user->forceFill($updates)->save();

@@ -110,8 +110,14 @@ return [
     |
     */
 
+    /*
+    | Falls back to the authenticated SMTP account rather than a placeholder
+    | address: a From that the relay does not own is silently rewritten at
+    | best and rejected at worst, and an unset key used to send live mail
+    | out as hello@example.com.
+    */
     'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
+        'address' => env('MAIL_FROM_ADDRESS') ?: env('MAIL_USERNAME'),
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 

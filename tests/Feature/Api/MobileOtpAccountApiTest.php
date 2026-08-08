@@ -202,7 +202,7 @@ class MobileOtpAccountApiTest extends TestCase
             ->assertStatus(422);
     }
 
-    public function test_account_details_updates_creator_locale_optional_email_password_and_alerts(): void
+    public function test_account_details_updates_creator_locale_password_and_alerts(): void
     {
         $user = User::query()->create([
             'name' => null,
@@ -235,7 +235,6 @@ class MobileOtpAccountApiTest extends TestCase
         $this
             ->patchJson('/api/v1/account/details', [
                 'creator_name' => 'Shankar Patil',
-                'email' => 'unique@example.com',
                 'locale' => 'mr',
                 'password' => 'Password1!',
                 'password_confirmation' => 'Password1!',
@@ -243,15 +242,15 @@ class MobileOtpAccountApiTest extends TestCase
             ->assertOk();
 
         $user->refresh();
-        $this->assertSame('unique@example.com', $user->email);
+        $this->assertNull($user->email);
         $this->assertSame('mr', $user->preferred_locale);
         $this->assertTrue(Hash::check('Password1!', (string) $user->password));
     }
 
-    public function test_account_details_rejects_email_used_by_another_user(): void
+    public function test_account_details_refuses_to_take_an_email(): void
     {
         User::factory()->create(['email' => 'used@example.com']);
-        $user = User::factory()->create(['email' => null]);
+        $user = User::factory()->create(['email' => null, 'name' => 'Before']);
         Sanctum::actingAs($user);
 
         $this
@@ -260,8 +259,13 @@ class MobileOtpAccountApiTest extends TestCase
                 'email' => 'used@example.com',
                 'locale' => 'mr',
             ])
-            ->assertStatus(409)
+            ->assertStatus(422)
             ->assertJsonValidationErrors(['email']);
+
+        // Rejected before anything was written — not a partial update.
+        $user->refresh();
+        $this->assertNull($user->email);
+        $this->assertSame('Before', $user->name);
     }
 
     public function test_existing_password_login_and_register_remain_backward_compatible(): void

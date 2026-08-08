@@ -157,7 +157,6 @@ Request:
 ```json
 {
   "creator_name": "User Name",
-  "email": "user@example.com",
   "locale": "mr",
   "password": "Password value accepted by Laravel password defaults",
   "password_confirmation": "Password value accepted by Laravel password defaults",
@@ -168,7 +167,7 @@ Request:
 Rules:
 
 - `creator_name`: required string, max 255; stored in `users.name`.
-- `email`: nullable email, max 255. If omitted, existing email is preserved. Email conflict is checked only when email is provided.
+- `email`: **prohibited here.** Sending a non-empty value returns 422 and writes nothing. An address only reaches `users.email` once its holder has proved possession — see `/account/email-otp/send` + `/account/email-otp/verify`, or `/account/email/google`. Sending the key with `null`/`""` is accepted and ignored, so clients that always include it keep working.
 - `locale`: nullable, supported values `mr`, `en`; stored in `users.preferred_locale`.
 - `password`: nullable, confirmed, Laravel `Rules\Password::defaults()`.
 - `whatsapp_alerts_opt_in`: nullable boolean notification preference. This does not verify WhatsApp and does not set `whatsapp_verified_at`.
