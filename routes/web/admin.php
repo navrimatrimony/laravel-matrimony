@@ -87,6 +87,24 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
             ? \App\Models\MatrimonyProfile::query()->whereShowcase()->count()
             : 0;
         $pendingAbuseReports = \App\Models\AbuseReport::where('status', 'open')->count();
+
+        /*
+        | A profile with one unresolved conflict is hidden from every search
+        | until an admin clears it, and nothing used to say so anywhere an
+        | admin looks — three profiles sat invisible for over a month before a
+        | member asked why. The age matters more than the count: a queue of two
+        | that is five weeks old is the failure, not the two.
+        */
+        $conflictPendingProfiles = \App\Models\MatrimonyProfile::query()
+            ->where('lifecycle_state', 'conflict_pending')
+            ->count();
+        $oldestPendingConflictAt = \App\Models\ConflictRecord::query()
+            ->where('resolution_status', 'PENDING')
+            ->min('created_at');
+        $oldestPendingConflictDays = $oldestPendingConflictAt
+            ? (int) \Illuminate\Support\Carbon::parse($oldestPendingConflictAt)->diffInDays(now())
+            : 0;
+
         $totalBiodataIntakes = \App\Models\BiodataIntake::count();
 
         $intakeQuery = \App\Models\BiodataIntake::query();
@@ -131,6 +149,8 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
             'showcaseProfilesCount' => $showcaseProfilesCount,
             'showcaseProfilesEnabled' => $showcaseProfilesEnabled,
             'pendingAbuseReports' => $pendingAbuseReports,
+            'conflictPendingProfiles' => $conflictPendingProfiles,
+            'oldestPendingConflictDays' => $oldestPendingConflictDays,
             'totalBiodataIntakes' => $totalBiodataIntakes,
             'intakeLast7Count' => $last7Count,
             'intakeLast30Count' => $last30Count,

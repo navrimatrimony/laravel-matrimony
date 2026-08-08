@@ -169,6 +169,24 @@
             <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">{{ $pendingAbuseReports }}</p>
             <a href="{{ route('admin.abuse-reports.index') }}" class="inline-block mt-3 text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400">View reports →</a>
         </div>
+        {{-- These members cannot be found by anyone until someone acts here. The
+             tile turns red past a week because the age is the real alarm. --}}
+        <div @class([
+            'rounded-lg border p-5',
+            'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600' => ($oldestPendingConflictDays ?? 0) <= 7,
+            'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700' => ($oldestPendingConflictDays ?? 0) > 7,
+        ])>
+            <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Profiles hidden by review</p>
+            <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">{{ $conflictPendingProfiles ?? 0 }}</p>
+            <p class="text-xs mt-1 {{ ($oldestPendingConflictDays ?? 0) > 7 ? 'text-red-700 dark:text-red-300 font-semibold' : 'text-gray-500 dark:text-gray-400' }}">
+                @if (($conflictPendingProfiles ?? 0) === 0)
+                    Nobody is waiting.
+                @else
+                    Oldest unresolved: {{ $oldestPendingConflictDays ?? 0 }} days. These profiles appear in no search until cleared.
+                @endif
+            </p>
+            <a href="{{ route('admin.conflict-records.index') }}" class="inline-block mt-3 text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400">Review conflicts →</a>
+        </div>
         <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 p-5">
             <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Biodata Intakes</p>
             <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">{{ $totalBiodataIntakes ?? 0 }}</p>

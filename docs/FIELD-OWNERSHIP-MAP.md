@@ -391,6 +391,27 @@ Each of these was a real defect, not a hypothetical:
     rejected/cancelled, with no due, paid or settled anywhere).
     `SuchakCrossSuchakObligationTest::test_no_existing_money_table_can_name_a_payer`
     pins all four as assertions, so the next "just add a column" trips over it.
+17. **An unanswered field counted as a disagreement, and hid the whole profile
+    (found 2026-08-08, shipped 2026-02-03).** `ConflictDetectionService` asked
+    "do these two values differ?" without first asking whether there were two
+    values. With the profile field empty, any incoming value — biodata OCR
+    filling `other_relatives_text`, `father_name`, `birth_time` — was recorded
+    as a PENDING conflict. One such record flips `lifecycle_state` to
+    `conflict_pending`, and that hides the profile from every search until an
+    admin clears it by hand. 14 of the 16 rows in the live queue had
+    `old_value = NULL`; three profiles had been invisible for up to 37 days, one
+    of them a paid member who had completed every blocking step. The fields
+    involved are optional, are never asked during onboarding, and nobody
+    verifies them. **Rule: a conflict needs two sides. Filling an empty field is
+    a fill, not a dispute — and before wiring any signal to `lifecycle_state`,
+    ask what the worst false positive costs, because that cost is "invisible to
+    the whole product", not "a flag on a row".** Two guards now exist:
+    `EmptyFieldIsNotAConflictTest` (empty→value raises nothing; a real
+    disagreement, an identity-critical change and a blanking still do) and
+    `HiddenProfilesAreVisibleToAdminTest` — because the queue was never the
+    problem, its silence was. The admin dashboard now reports how many profiles
+    are hidden and how old the oldest unresolved record is, and turns red past a
+    week.
 
 ---
 
