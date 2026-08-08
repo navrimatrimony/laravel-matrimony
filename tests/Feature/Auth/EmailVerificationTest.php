@@ -5,12 +5,15 @@ use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
 
-test('email verification screen can be rendered', function () {
+test('the old verify-email prompt now leads to the one email authority', function () {
+    // The "we mailed you a link, want another?" page is gone: minting links on
+    // demand was a second way to verify an address. The route name survives
+    // only so anything meaning "go verify your email" lands on the OTP page.
     $user = User::factory()->unverified()->create();
 
     $response = $this->actingAs($user)->get('/verify-email');
 
-    $response->assertStatus(200);
+    $response->assertRedirect(route('user.settings.email'));
 });
 
 test('email can be verified', function () {

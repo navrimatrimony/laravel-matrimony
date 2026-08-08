@@ -2,8 +2,6 @@
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
-use App\Http\Controllers\Auth\EmailVerificationNotificationController;
-use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
@@ -41,16 +39,26 @@ Route::middleware('auth')->group(function () {
     Route::post('mobile-verify/send', [\App\Http\Controllers\Auth\MobileOtpController::class, 'sendOtp'])->name('mobile.verify.send');
     Route::post('mobile-verify/verify', [\App\Http\Controllers\Auth\MobileOtpController::class, 'verifyOtp'])->name('mobile.verify.submit');
 
-    Route::get('verify-email', EmailVerificationPromptController::class)
+    /*
+    | Email verification has ONE authority: the OTP engine behind
+    | /settings/email. This route name survives only because Laravel's own
+    | `verified` middleware and anything else that means "go verify your email"
+    | resolves it — it now leads to that one page instead of a second flow.
+    */
+    Route::get('verify-email', fn () => redirect()->route('user.settings.email'))
         ->name('verification.notice');
 
+    /*
+    | The signed link is NOT a way to change an email — it only marks the
+    | address already on the account verified. It stays because registration
+    | still mints these links (Registered → SendEmailVerificationNotification,
+    | reached from Api\AuthController::register, which takes an email), so
+    | removing it would dead-end mail already sitting in inboxes. There is
+    | deliberately no page that mints a new one on demand.
+    */
     Route::get('verify-email/{id}/{hash}', VerifyEmailController::class)
         ->middleware(['signed', 'throttle:6,1'])
         ->name('verification.verify');
-
-    Route::post('email/verification-notification', [EmailVerificationNotificationController::class, 'store'])
-        ->middleware('throttle:6,1')
-        ->name('verification.send');
 
     Route::get('confirm-password', [ConfirmablePasswordController::class, 'show'])
         ->name('password.confirm');

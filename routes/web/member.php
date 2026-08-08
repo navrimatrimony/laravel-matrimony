@@ -15,7 +15,7 @@ use App\Http\Controllers\Internal\CurrentLocationController;
 use App\Http\Controllers\MatchController;
 use App\Http\Controllers\MemberReferralController;
 use App\Http\Controllers\MatrimonyProfileController;
-use App\Http\Controllers\MatrimonyVerificationEmailController;
+use App\Http\Controllers\Settings\MemberEmailVerificationController;
 use App\Http\Controllers\MediationInboxController;
 use App\Http\Controllers\MemberWidgetController;
 use App\Http\Controllers\NotificationController;
@@ -136,6 +136,23 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
 
     Route::get('/settings/security', [UserSettingsController::class, 'security'])
         ->name('user.settings.security');
+
+    /*
+    | Verifying or changing the member's own email on the web. Thin adapters over
+    | MobileEmailVerificationService — the same engine the apps use — so the web
+    | has no verification path of its own. Throttles here only stop form
+    | hammering; the real per-email/per-IP limits live in the service.
+    */
+    Route::get('/settings/email', [MemberEmailVerificationController::class, 'show'])
+        ->name('user.settings.email');
+    Route::post('/settings/email/otp', [MemberEmailVerificationController::class, 'sendOtp'])
+        ->middleware('throttle:10,1')
+        ->name('user.settings.email.otp.send');
+    Route::post('/settings/email/verify', [MemberEmailVerificationController::class, 'verifyOtp'])
+        ->middleware('throttle:20,1')
+        ->name('user.settings.email.otp.verify');
+    Route::post('/settings/email/cancel', [MemberEmailVerificationController::class, 'cancel'])
+        ->name('user.settings.email.otp.cancel');
 
     Route::get('/settings/notifications', [UserSettingsController::class, 'notifications'])
         ->name('user.settings.notifications');
@@ -261,11 +278,6 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
     Route::get('/profile/{matrimony_profile_id}', [MatrimonyProfileController::class, 'show'])
         ->name('matrimony.profile.show');
 
-    Route::get('/matrimony/verification/email', [MatrimonyVerificationEmailController::class, 'show'])
-        ->name('matrimony.verification.email');
-    Route::post('/matrimony/verification/email', [MatrimonyVerificationEmailController::class, 'sendVerificationLink'])
-        ->middleware('throttle:6,1')
-        ->name('matrimony.verification.email.send');
     Route::get('/matrimony/profile/{matrimony_profile_id}/verification/kyc', [ProfileVerificationController::class, 'showKyc'])
         ->name('matrimony.verification.kyc');
     Route::post('/matrimony/profile/{matrimony_profile_id}/verification/kyc', [ProfileVerificationController::class, 'storeKyc'])

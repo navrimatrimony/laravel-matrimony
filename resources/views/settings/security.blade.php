@@ -100,18 +100,29 @@
                         <div>
                             <div class="font-medium text-gray-900 dark:text-gray-100">{{ __('Email') }}</div>
                             <div class="text-sm text-gray-600 dark:text-gray-400">
-                                {{ __('Verify to secure your account and recover access.') }}
+                                {{ $user->email ?: __('settings_email.no_email') }}
                             </div>
+                            {{-- Both actions land on the same page: verifying what is
+                                 there and replacing it are one flow on the server. --}}
+                            <a href="{{ route('user.settings.email') }}"
+                               class="mt-1 inline-block text-sm text-rose-700 dark:text-rose-400 hover:underline">
+                                @if (! $user->email)
+                                    {{ __('settings_email.add_heading') }}
+                                @elseif ($emailVerified)
+                                    {{ __('settings_email.change_heading') }}
+                                @else
+                                    {{ __('settings_email.verify_current_heading') }}
+                                @endif
+                            </a>
                         </div>
                         @if ($emailVerified)
                             <span class="px-3 py-1 rounded-full bg-green-100 text-green-800 text-sm font-medium">
-                                {{ __('Email verified') }}
+                                {{ __('settings_email.verified') }}
                             </span>
-                        @else
-                            <a href="{{ route('verification.notice') }}"
-                               class="px-3 py-1 rounded-full bg-red-50 text-red-700 text-sm font-medium hover:bg-red-100 transition">
-                                {{ __('Verify email') }}
-                            </a>
+                        @elseif ($user->email)
+                            <span class="px-3 py-1 rounded-full bg-red-50 text-red-700 text-sm font-medium">
+                                {{ __('settings_email.unverified') }}
+                            </span>
                         @endif
                     </div>
                 </div>

@@ -140,7 +140,7 @@ class ProfileShowReadService
             $unverified[] = [
                 'key' => 'email',
                 'label' => __('profile.verify_row_email'),
-                'verify_url' => route('matrimony.verification.email'),
+                'verify_url' => route('user.settings.email'),
             ];
         }
 
