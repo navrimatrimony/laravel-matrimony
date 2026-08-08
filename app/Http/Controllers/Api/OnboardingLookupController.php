@@ -166,7 +166,7 @@ class OnboardingLookupController extends Controller
         $request->validate([
             'q' => ['nullable', 'string', 'max:120'],
             'preferred_state_id' => ['nullable', 'integer', Rule::exists(Location::geoTable(), 'id')->where('hierarchy', 'state')->where('is_active', true)],
-            'type' => ['nullable', 'string', Rule::in(['country', 'state', 'district', 'taluka', 'village', 'city', 'suburb'])],
+            'type' => ['nullable', 'string', Rule::in(['country', 'state', 'district', 'taluka', 'village', 'city', 'suburb', 'leaf'])],
         ]);
         $params = $this->listParams($request);
         $type = $request->input('type');
@@ -787,6 +787,10 @@ class OnboardingLookupController extends Controller
     {
         if (in_array($type, ['country', 'state', 'district', 'taluka'], true)) {
             $query->where('hierarchy', $type);
+        } elseif ($type === 'leaf') {
+            // Any saveable place — village, city or suburb — but never a rung
+            // of the ladder. Profile fields search with this.
+            $query->where('hierarchy', 'village');
         } elseif ($type === 'village') {
             $query->where('hierarchy', 'village')->where('tag', 'rural');
         } elseif ($type === 'city') {

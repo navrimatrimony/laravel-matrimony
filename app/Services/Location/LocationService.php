@@ -197,9 +197,14 @@ class LocationService
 
         $limit = $this->searchResultLimit($options['limit'] ?? null);
         $preferredStateId = $this->resolvePreferredStateId($options);
+        // Leaf = a place a member can live in (village / city / suburb row).
+        // District, taluka and state rows are ladder rungs — a profile field
+        // must never offer them, but the nearby/GPS fallback needs them, so
+        // the full list stays the default and callers opt in.
+        $leafOnly = (bool) ($options['leaf_only'] ?? false);
         $tokens = $this->distinctSearchTokens($normalized);
         if (count($tokens) >= 2) {
-            return $this->searchMultiToken($tokens, $limit, $preferredStateId);
+            return $this->searchMultiToken($tokens, $limit, $preferredStateId, $leafOnly);
         }
 
         $like = '%'.$normalized.'%';
@@ -211,6 +216,7 @@ class LocationService
         $locations = Location::query()
             ->with('parent')
             ->where('is_active', true)
+            ->when($leafOnly, static fn ($q) => $q->where('hierarchy', 'village'))
             ->where(function ($q) use ($normalized, $like, $geo, $digitsOnly) {
                 $q->where('name', 'like', $like)
                     ->orWhere('slug', 'like', $like);
@@ -276,7 +282,7 @@ class LocationService
      * @param  list<string>  $tokens  Lowercase tokens, length ≥ 2, de-duplicated.
      * @return array<int, array{id:int,name:string,hierarchy:string,display_label:string,state_id:int|null,preferred_state:bool}>
      */
-    private function searchMultiToken(array $tokens, int $limit, ?int $preferredStateId): array
+    private function searchMultiToken(array $tokens, int $limit, ?int $preferredStateId, bool $leafOnly = false): array
     {
         $geo = Location::geoTable();
         $primary = $tokens[0];
@@ -284,6 +290,7 @@ class LocationService
 
         $locations = Location::query()
             ->where('is_active', true)
+            ->when($leafOnly, static fn ($q) => $q->where('hierarchy', 'village'))
             ->where(function ($q) use ($primary, $primaryLike, $geo): void {
                 $q->where('name', 'like', $primaryLike)
                     ->orWhere('slug', 'like', $primaryLike);
@@ -308,6 +315,7 @@ class LocationService
         if ($locations->isEmpty()) {
             $locations = Location::query()
                 ->where('is_active', true)
+                ->when($leafOnly, static fn ($q) => $q->where('hierarchy', 'village'))
                 ->where(function ($q) use ($tokens, $geo): void {
                     foreach ($tokens as $t) {
                         $tl = '%'.$t.'%';

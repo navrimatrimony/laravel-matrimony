@@ -28,6 +28,9 @@ class LocationController extends Controller
             'limit' => $limit,
             'preferred_state_id' => $preferredStateId,
             'preferred_state_name' => $preferredStateName,
+            // Profile place fields must only ever offer saveable rows; the
+            // nearby/GPS fallback still wants districts, so this is opt-in.
+            'leaf_only' => $request->input('type') === 'leaf',
         ]);
 
         $payload = array_map(static function (array $row): array {

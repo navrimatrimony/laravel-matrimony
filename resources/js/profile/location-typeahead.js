@@ -28,9 +28,12 @@
             var u = (base.indexOf('http') === 0) ? new URL(base) : new URL(base, window.location.href);
             u.searchParams.set('q', q);
             u.searchParams.set('locale', locale);
+            // Profile fields may only offer saveable places (village/city/
+            // suburb) — a district picked here fails validation on save.
+            u.searchParams.set('type', 'leaf');
             return u.toString();
         } catch (e) {
-            return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'q=' + encodeURIComponent(q) + '&locale=' + encodeURIComponent(locale);
+            return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'q=' + encodeURIComponent(q) + '&locale=' + encodeURIComponent(locale) + '&type=leaf';
         }
     }
 
