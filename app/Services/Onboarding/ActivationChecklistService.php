@@ -108,8 +108,45 @@ class ActivationChecklistService
                 continue;
             }
 
+            // "Required fields are missing" is a drawer, not a task. Handed to a
+            // member as-is it says nothing they can act on, so it is opened here
+            // and each field inside becomes its own entry. Fields that already
+            // have a gate row of their own (location, photo) are left to that
+            // row, or the same thing would be asked for twice.
+            if ($key === 'required_fields_complete') {
+                foreach ((array) ($row['missing_fields'] ?? []) as $field) {
+                    $field = (string) $field;
+                    if (isset(self::FIELD_COVERED_BY_GATE[$field])) {
+                        continue;
+                    }
+                    $fieldMeta = self::FIELD_BLOCKERS[$field] ?? null;
+                    if ($fieldMeta === null) {
+                        continue;
+                    }
+                    $queue[] = [
+                        'key' => 'field:'.$field,
+                        'field' => $field,
+                        'label' => (string) ($row['label'] ?? $key),
+                        'message' => (string) ($row['message'] ?? ''),
+                        'action' => $fieldMeta['action'],
+                        'actionable_by_member' => true,
+                        'missing_fields' => [$field],
+                    ];
+                }
+
+                continue;
+            }
+
+            // "Photo approval pending" alongside "upload a photo" is two
+            // problems where there is one, and the second cannot even start
+            // until the first is done.
+            if ($key === 'photo_approved' && ($rows->get('photo_uploaded')['complete'] ?? true) !== true) {
+                continue;
+            }
+
             $queue[] = [
                 'key' => $key,
+                'field' => $meta['field'] ?? null,
                 'label' => (string) ($row['label'] ?? $key),
                 'message' => (string) ($row['message'] ?? ''),
                 'action' => $meta['action'],
@@ -178,12 +215,34 @@ class ActivationChecklistService
      * `profile_active` and `governance_clear` are the only two that genuinely
      * are not the member's to clear.
      */
+    /**
+     * A mandatory field that is ALSO its own gate row. The gate row is the one
+     * that gets asked for, because it checks more than "is the column filled"
+     * — a location must be an active village, a photo must exist and be
+     * approved — and asking twice for one thing reads as two problems.
+     */
+    private const FIELD_COVERED_BY_GATE = [
+        'location' => 'location_valid',
+        'profile_photo' => 'photo_uploaded',
+    ];
+
+    /** Where a member goes to answer each mandatory field. */
+    private const FIELD_BLOCKERS = [
+        'gender' => ['action' => 'complete_profile'],
+        'date_of_birth' => ['action' => 'complete_profile'],
+        'marital_status' => ['action' => 'complete_profile'],
+        'caste' => ['action' => 'complete_profile'],
+        'religion' => ['action' => 'complete_profile'],
+        'education' => ['action' => 'complete_education'],
+        'occupation' => ['action' => 'complete_education'],
+    ];
+
     private const BLOCKER_ORDER = [
         'mobile_verified' => ['action' => 'verify_mobile', 'actionable_by_member' => true],
         'required_fields_complete' => ['action' => 'complete_profile', 'actionable_by_member' => true],
-        'location_valid' => ['action' => 'set_location', 'actionable_by_member' => true],
-        'photo_uploaded' => ['action' => 'upload_photo', 'actionable_by_member' => true],
-        'photo_approved' => ['action' => 'upload_photo', 'actionable_by_member' => true],
+        'location_valid' => ['action' => 'set_location', 'actionable_by_member' => true, 'field' => 'location'],
+        'photo_uploaded' => ['action' => 'upload_photo', 'actionable_by_member' => true, 'field' => 'profile_photo'],
+        'photo_approved' => ['action' => 'upload_photo', 'actionable_by_member' => true, 'field' => 'profile_photo'],
         'governance_clear' => ['action' => 'wait', 'actionable_by_member' => false],
         'profile_active' => ['action' => 'wait', 'actionable_by_member' => false],
     ];

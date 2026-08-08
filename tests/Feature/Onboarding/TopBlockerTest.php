@@ -97,9 +97,13 @@ class TopBlockerTest extends TestCase
         $progress = $this->checklist->activationProgress($user, $profile);
         $outstanding = count($this->checklist->blockerQueue($user, $profile));
 
+        // The bar counts GATES; the queue counts ACTIONS, and one gate can open
+        // into several (required fields). What must always hold is the only
+        // thing a member reads off the bar: it is full exactly when nothing is
+        // in the way.
         $this->assertSame(7, $progress['total']);
-        // The bar can never fill while something is still in the way.
-        $this->assertSame($progress['total'] - $progress['done'], $outstanding);
+        $this->assertLessThan($progress['total'], $progress['done']);
+        $this->assertGreaterThan(0, $outstanding);
     }
 
     public function test_the_missing_mandatory_fields_are_named_not_just_counted(): void
@@ -132,6 +136,74 @@ class TopBlockerTest extends TestCase
         $this->assertNotEmpty($this->checklist->blockerQueue($user, $profile));
         $progress = $this->checklist->activationProgress($user, $profile);
         $this->assertLessThan($progress['total'], $progress['done']);
+    }
+
+    public function test_the_required_fields_drawer_is_opened_into_named_actions(): void
+    {
+        // "Required profile fields are missing" is not something a member can
+        // do. The fields inside it are.
+        $user = $this->member();
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'lifecycle_state' => 'draft',
+            'caste_id' => null,
+        ]);
+
+        $queue = $this->checklist->blockerQueue($user, $profile);
+        $keys = array_column($queue, 'key');
+
+        $this->assertNotContains(
+            'required_fields_complete',
+            $keys,
+            'The drawer itself must never reach a member — only what is inside it.'
+        );
+
+        $casteEntry = collect($queue)->firstWhere('field', 'caste');
+        $this->assertNotNull($casteEntry, 'A missing caste must be named as its own action.');
+        $this->assertSame('complete_profile', $casteEntry['action']);
+        $this->assertTrue($casteEntry['actionable_by_member']);
+    }
+
+    public function test_a_field_with_its_own_gate_is_asked_for_once_not_twice(): void
+    {
+        // location is both a mandatory field and a gate row. Emitting both would
+        // show one problem as two.
+        $user = $this->member();
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'lifecycle_state' => 'draft',
+        ]);
+
+        $queue = $this->checklist->blockerQueue($user, $profile);
+        $locationEntries = array_values(array_filter(
+            $queue,
+            fn (array $b): bool => ($b['field'] ?? null) === 'location'
+        ));
+        $photoEntries = array_values(array_filter(
+            $queue,
+            fn (array $b): bool => ($b['field'] ?? null) === 'profile_photo'
+        ));
+
+        $this->assertCount(1, $locationEntries);
+        $this->assertSame('location_valid', $locationEntries[0]['key']);
+        // photo_uploaded and photo_approved are different states of one thing,
+        // and only one of them can be outstanding at a time.
+        $this->assertLessThanOrEqual(1, count(array_unique(array_column($photoEntries, 'key'))));
+    }
+
+    public function test_every_entry_carries_an_action_the_app_can_route_on(): void
+    {
+        $user = $this->member(['mobile_verified_at' => null]);
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'lifecycle_state' => 'draft',
+            'caste_id' => null,
+        ]);
+
+        foreach ($this->checklist->blockerQueue($user, $profile) as $blocker) {
+            $this->assertNotEmpty($blocker['action'], "Blocker {$blocker['key']} has nowhere to send anyone.");
+            $this->assertArrayHasKey('field', $blocker);
+        }
     }
 
     public function test_only_one_blocker_is_ever_returned(): void
