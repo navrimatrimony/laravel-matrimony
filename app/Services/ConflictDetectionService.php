@@ -89,6 +89,16 @@ class ConflictDetectionService
                 continue;
             }
 
+            // Nothing to disagree with. A conflict is two sides claiming a
+            // different value for the same fact; an empty field claims nothing,
+            // so filling it is a fill, not a dispute. Recording one here froze
+            // whole profiles behind an admin queue over fields nobody had
+            // answered yet — see the empty-to-value guard in the extended loop
+            // below, which exists for the same reason.
+            if (self::normalize($current) === null) {
+                continue;
+            }
+
             // One field = one PENDING conflict max; do not create duplicate.
             if (ConflictRecord::where('profile_id', $profile->id)->where('field_name', $fieldKey)->where('resolution_status', 'PENDING')->exists()) {
                 continue;
@@ -121,6 +131,11 @@ class ConflictDetectionService
             $current = self::normalize($current);
             $proposed = self::normalize($proposed);
             if (self::valuesDiffer($current, $proposed)) {
+                // Same rule as the core loop: an empty current value is not a
+                // competing claim, so filling it must not raise a conflict.
+                if ($current === null) {
+                    continue;
+                }
                 if (ConflictRecord::where('profile_id', $profile->id)->where('field_name', $fieldKey)->where('resolution_status', 'PENDING')->exists()) {
                     continue;
                 }
