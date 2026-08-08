@@ -402,12 +402,22 @@ Each of these was a real defect, not a hypothetical:
     `old_value = NULL`; three profiles had been invisible for up to 37 days, one
     of them a paid member who had completed every blocking step. The fields
     involved are optional, are never asked during onboarding, and nobody
-    verifies them. **Rule: a conflict needs two sides. Filling an empty field is
-    a fill, not a dispute — and before wiring any signal to `lifecycle_state`,
-    ask what the worst false positive costs, because that cost is "invisible to
-    the whole product", not "a flag on a row".** Two guards now exist:
-    `EmptyFieldIsNotAConflictTest` (empty→value raises nothing; a real
-    disagreement, an identity-critical change and a blanking still do) and
+    verifies them. **The rule, from the owner and older than the defect: a
+    machine FILLS WHAT IS EMPTY and NEVER TOUCHES WHAT IS ANSWERED.** It has
+    existed since `5f2dc0b2` (Phase-3 Day-6, field locking) and is restated in
+    `2045e5c8` ("without overwriting user locations"), `461173e5` ("stop --force
+    from erasing an owner-supplied taluka centre") and the DAY31 audit; what was
+    missing was any code that applied it to conflict detection. So a differing
+    reading is now DROPPED, not queued: there is no question to put to anyone,
+    because the answer on the profile stands. `is_system_overwritable` was the
+    per-field version of the same idea and had no reader in seven months — the
+    rule is uniform, so it does not need one. **And before wiring any signal to
+    `lifecycle_state`, ask what the worst false positive costs: here it was
+    "invisible to the whole product", not "a flag on a row".** Guards:
+    `MachineNeverOverwritesAnAnsweredFieldTest` (fills raise nothing; an
+    answered field is neither rewritten nor blanked nor queued; a direct
+    overwrite of a governed field is still refused, and now leaves no ghost row
+    because the save it describes was aborted) and
     `HiddenProfilesAreVisibleToAdminTest` — because the queue was never the
     problem, its silence was. The admin dashboard now reports how many profiles
     are hidden and how old the oldest unresolved record is, and turns red past a

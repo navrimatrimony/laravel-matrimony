@@ -1478,12 +1478,15 @@ class MatrimonyProfile extends Model
         $clone->exists = true;
 
         $proposedCore = array_intersect_key($dirty, array_flip(self::GOVERNED_CORE_KEYS));
-        $created = ConflictDetectionService::detect($clone, $proposedCore, []);
+        $overwritten = ConflictDetectionService::wouldOverwriteAnsweredField($clone, $proposedCore);
 
-        if (count($created) > 0) {
+        if ($overwritten !== []) {
+            // Refuse the write; do not record anything. The save is aborted, so
+            // a PENDING row here would describe a change that never happened
+            // and would hide the profile until someone resolved a ghost.
             throw ValidationException::withMessages([
                 'lifecycle_state' => [
-                    'Governance: conflicting change detected. '.count($created).' conflict(s) created. Direct overwrite is not allowed.',
+                    'Governance: direct overwrite is not allowed for '.implode(', ', $overwritten).'. Route the change through MutationService.',
                 ],
             ]);
         }

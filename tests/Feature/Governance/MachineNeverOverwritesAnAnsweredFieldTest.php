@@ -12,18 +12,20 @@ use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\ProfileLifecycleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 /**
- * A conflict is two sides claiming a different value for the same fact.
+ * The owner's rule, in one line: a machine fills what is EMPTY and never
+ * touches what is ANSWERED.
  *
- * Filling a field nobody had answered is not that, and treating it as one had a
- * consequence far out of proportion to the fact involved: one PENDING record on
- * an optional field flips the whole profile to conflict_pending, which hides it
- * from every search until an admin clears the record by hand. Members had no
- * way to see the reason and no way to act on it.
+ * Both halves used to raise a PENDING conflict, and one PENDING record flips
+ * the whole profile to conflict_pending — hidden from every search until an
+ * admin clears it by hand. A paid member sat invisible for 37 days over a
+ * biodata sheet reading 180.34 where his profile said 168, a question nobody
+ * needed to answer because the profile's answer already stood.
  */
-class EmptyFieldIsNotAConflictTest extends TestCase
+class MachineNeverOverwritesAnAnsweredFieldTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -116,10 +118,8 @@ class EmptyFieldIsNotAConflictTest extends TestCase
         $this->assertTrue(ProfileLifecycleService::isVisibleToOthers($profile));
     }
 
-    public function test_a_real_disagreement_still_raises_a_conflict(): void
+    public function test_an_answered_field_is_left_alone_and_raises_nothing(): void
     {
-        // The guard must not disarm governance: when the profile already says
-        // one thing and something proposes another, that is still a conflict.
         $this->registerCoreFields('other_relatives_text');
         $profile = $this->activeProfile();
         $profile->forceFill(['other_relatives_text' => 'जाधव'])->save();
@@ -128,34 +128,18 @@ class EmptyFieldIsNotAConflictTest extends TestCase
             'other_relatives_text' => 'पवार',
         ], []);
 
-        $this->assertCount(1, $created);
-        $this->assertSame('other_relatives_text', $created[0]->field_name);
+        $this->assertSame([], $created);
+        $this->assertSame(0, ConflictRecord::query()->where('profile_id', $profile->id)->count());
 
+        // And the profile stays where anybody can find it.
         ProfileLifecycleService::syncLifecycleFromPendingConflicts($profile);
-        $this->assertSame('conflict_pending', $profile->fresh()->lifecycle_state);
+        $profile->refresh();
+        $this->assertSame('active', $profile->lifecycle_state);
+        $this->assertSame('जाधव', $profile->other_relatives_text);
     }
 
-    public function test_an_identity_critical_change_still_raises_a_conflict(): void
+    public function test_a_machine_cannot_blank_an_answer_either(): void
     {
-        $this->registerCoreFields('full_name');
-        // The factory already gave this profile a name, and the model refuses a
-        // direct identity rewrite on save — which is the point: the only way to
-        // propose a different one is through detection.
-        $profile = $this->activeProfile();
-        $this->assertNotEmpty($profile->full_name);
-
-        $created = ConflictDetectionService::detect($profile, [
-            'full_name' => $profile->full_name.' (someone else)',
-        ], []);
-
-        $this->assertCount(1, $created);
-        $this->assertSame('full_name', $created[0]->field_name);
-    }
-
-    public function test_a_blank_proposal_over_a_real_value_is_still_a_conflict(): void
-    {
-        // The guard is one-directional on purpose: erasing an answer someone
-        // gave is exactly the kind of change governance exists to catch.
         $this->registerCoreFields('other_relatives_text');
         $profile = $this->activeProfile();
         $profile->forceFill(['other_relatives_text' => 'जाधव'])->save();
@@ -164,6 +148,35 @@ class EmptyFieldIsNotAConflictTest extends TestCase
             'other_relatives_text' => '',
         ], []);
 
-        $this->assertCount(1, $created);
+        $this->assertSame([], $created);
+        $this->assertSame('जाधव', $profile->fresh()->other_relatives_text);
+    }
+
+    public function test_a_direct_overwrite_of_a_governed_field_is_still_refused(): void
+    {
+        // Detection stopped filing disputes; it must not have stopped the save
+        // guard, which is what keeps a governed value from being rewritten
+        // behind MutationService's back.
+        $this->registerCoreFields('full_name');
+        $profile = $this->activeProfile();
+        $this->assertNotEmpty($profile->full_name);
+
+        $this->expectException(ValidationException::class);
+        $profile->forceFill(['full_name' => $profile->full_name.' (someone else)'])->save();
+    }
+
+    public function test_a_refused_overwrite_leaves_no_ghost_record_behind(): void
+    {
+        $this->registerCoreFields('full_name');
+        $profile = $this->activeProfile();
+
+        try {
+            $profile->forceFill(['full_name' => 'Someone Else'])->save();
+        } catch (ValidationException) {
+            // expected
+        }
+
+        $this->assertSame(0, ConflictRecord::query()->where('profile_id', $profile->id)->count());
+        $this->assertSame('active', $profile->fresh()->lifecycle_state);
     }
 }

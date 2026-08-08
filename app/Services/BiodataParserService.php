@@ -1521,7 +1521,17 @@ class BiodataParserService
     /**
      * Normalize Marathi birth time phrases to HH:MM (24-hour).
      */
-    private function normalizeBirthTime(?string $value): ?string
+    /**
+     * A biodata line gives the time in whatever shape the family wrote it, and
+     * often gives the weekday alongside — the labels this parser reads include
+     * "जन्म वेळ व वार". Only the clock time belongs in the column; the weekday
+     * is a fact about date_of_birth and derivable whenever it is wanted.
+     *
+     * Public because IntakeNormalizedBiodataDraftBuilder writes the same field
+     * from the labelled-line path and must land on the same value; a second
+     * normalizer there would be a second answer to one question.
+     */
+    public static function normalizeBirthTime(?string $value): ?string
     {
         if ($value === null) {
             return null;
@@ -1564,9 +1574,34 @@ class BiodataParserService
         $isAfternoon = mb_strpos($lower, 'दुपारी') !== false;
         $isMorning = mb_strpos($lower, 'सकाळी') !== false || mb_strpos($lower, 'पहाटे') !== false;
 
-        // OCR often writes "मी." (minutes) instead of "मि."
+        // "सकाळी 7 वाजता", "सकाळी 9.00 वाजता", "7:45 am" — no मि./मी. marker,
+        // which the two patterns above both require. These are the shapes that
+        // used to fall through and get stored as the whole sentence.
         if (! preg_match('/(\d{1,2})\s*वा\.?\s*(\d{1,2})\s*(?:मि|मी)\.?/u', $lower, $m)) {
-            return null;
+            if (preg_match('/(\d{1,2})\s*[.:]\s*(\d{2})/u', $lower, $dm)) {
+                $hour = (int) $dm[1];
+                $minute = (int) $dm[2];
+            } elseif (preg_match('/(\d{1,2})\s*(?:वाजता|वा\.?|am|pm|$)/u', $lower, $hm)) {
+                $hour = (int) $hm[1];
+                $minute = 0;
+            } else {
+                return null;
+            }
+
+            if ($hour > 23 || $minute > 59) {
+                return null;
+            }
+            if (($isNight || $isEvening || $isAfternoon) && $hour < 12) {
+                $hour += 12;
+            }
+            if ($isMorning && $hour === 12) {
+                $hour = 0;
+            }
+            if ($hour === 24) {
+                $hour = 0;
+            }
+
+            return sprintf('%02d:%02d', $hour, $minute);
         }
 
         $hour = (int) $m[1];

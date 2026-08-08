@@ -2,6 +2,7 @@
 
 namespace App\Services\Parsing;
 
+use App\Services\BiodataParserService;
 use App\Services\Ocr\OcrNormalize;
 
 class IntakeNormalizedBiodataDraftBuilder
@@ -1223,12 +1224,16 @@ class IntakeNormalizedBiodataDraftBuilder
                 }
             }
             if (($birthTimeValue = $this->extractLabeledValue($line, ['जन्म वेळ व वार', 'जन्म वेळ आणि वार', 'जन्मवेळ व वार', 'जन्मवेळ आणि वार', 'जन्म वेळ', 'जन्मवेळ'])) !== null) {
-                $core['birth_time'] = $birthTimeValue;
+                // The label itself says "वेळ व वार", so the raw value carries the
+                // weekday too. Only the clock time belongs in this column, and the
+                // parser already knows how to read one out of a Marathi line.
+                $core['birth_time'] = BiodataParserService::normalizeBirthTime($birthTimeValue)
+                    ?? $core['birth_time'];
             }
             if ($core['birth_time'] === null
                 && preg_match('/^(?:वार|जन्म\s*वार\s*व\s*वेळ|जन्मवार\s*व\s*वेळ|जन्मवार\s*आणि\s*वेळ)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)
                 && preg_match('/\d{1,2}(?:[.:]\d{1,2})?\s*(?:A\.?M\.?|P\.?M\.?|am|pm)?|सकाळी|दुपारी|सायंकाळी|रात्री/ui', OcrNormalize::normalizeDigits($m[1]))) {
-                $core['birth_time'] = trim($m[1]);
+                $core['birth_time'] = BiodataParserService::normalizeBirthTime($m[1]);
             }
             if (($birthPlace = $this->extractLabeledValue($line, ['जन्म ठिकाण', 'जन्म स्थळ', 'जन्मठिकाण'])) !== null) {
                 $core['birth_place_text'] = $birthPlace;

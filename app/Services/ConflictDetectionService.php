@@ -6,14 +6,19 @@ use App\Models\ConflictRecord;
 use App\Models\FieldRegistry;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
-use App\Services\Core\ConflictPolicy;
 use App\Services\Location\LocationService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\Profile\ProfileTypedSelfAddressService;
 
 /**
  * Phase-3 Day-13 / Phase-5: Conflict detection with Escalation Matrix.
- * Compares profile current vs proposed; creates ConflictRecords per escalation rules.
+ * Compares what a machine proposes against what the profile already says.
+ *
+ * It no longer records anything: the owner's rule is that a machine fills what
+ * is empty and never touches what is answered, which leaves no disagreement for
+ * it to file. Conflicts still exist — they are raised where a HUMAN proposes a
+ * competing value (duplicate detection and lock violations in MutationService,
+ * source USER) and resolved through ConflictResolutionService.
  * Does NOT mutate profile, change lifecycle, or write history.
  * CORE classification from FieldRegistry; identity-critical vs dynamic from contract.
  *
@@ -89,70 +94,65 @@ class ConflictDetectionService
                 continue;
             }
 
-            // Nothing to disagree with. A conflict is two sides claiming a
-            // different value for the same fact; an empty field claims nothing,
-            // so filling it is a fill, not a dispute. Recording one here froze
-            // whole profiles behind an admin queue over fields nobody had
-            // answered yet — see the empty-to-value guard in the extended loop
-            // below, which exists for the same reason.
-            if (self::normalize($current) === null) {
-                continue;
-            }
-
-            // One field = one PENDING conflict max; do not create duplicate.
-            if (ConflictRecord::where('profile_id', $profile->id)->where('field_name', $fieldKey)->where('resolution_status', 'PENDING')->exists()) {
-                continue;
-            }
-
-            $created[] = ConflictPolicy::create([
-                'profile_id' => $profile->id,
-                'field_name' => $fieldKey,
-                'field_type' => 'CORE',
-                'old_value' => $current === null ? null : (string) $current,
-                'new_value' => $proposed === null ? null : (string) $proposed,
-                'source' => 'SYSTEM',
-                'detected_at' => now(),
-                'resolution_status' => 'PENDING',
-            ]);
-
-            if (self::isIdentityCriticalField($fieldKey) && $seriousIntentActive) {
-                $requiresAdmin = true;
-            }
+            // THE RULE (owner, 2026-08-08). A machine fills what is EMPTY and
+            // never touches what is ANSWERED. Both halves end here:
+            //
+            //  - empty field: filling it is a fill, not a disagreement, so the
+            //    value goes on through and nothing is recorded;
+            //  - answered field: a different reading is not the machine's to
+            //    argue with. It is dropped, NOT queued for a human, because
+            //    there is no question to put to anyone — the answer on the
+            //    profile stands.
+            //
+            // Which is why nothing below this line writes a record any more.
+            // A member was invisible for 37 days over a biodata sheet that read
+            // 180.34 where his profile said 168, and there was never a decision
+            // for anyone to make about it.
+            continue;
         }
 
-        $currentExtended = ExtendedFieldService::getValuesForProfile($profile);
-        $extendedKeysToCheck = array_unique(array_merge(array_keys($currentExtended), array_keys($proposedExtended)));
-        foreach ($extendedKeysToCheck as $fieldKey) {
-            if (ProfileFieldLockService::isLocked($profile, $fieldKey)) {
-                continue;
-            }
-            $current = $currentExtended[$fieldKey] ?? null;
-            $proposed = array_key_exists($fieldKey, $proposedExtended) ? $proposedExtended[$fieldKey] : null;
-            $current = self::normalize($current);
-            $proposed = self::normalize($proposed);
-            if (self::valuesDiffer($current, $proposed)) {
-                // Same rule as the core loop: an empty current value is not a
-                // competing claim, so filling it must not raise a conflict.
-                if ($current === null) {
-                    continue;
-                }
-                if (ConflictRecord::where('profile_id', $profile->id)->where('field_name', $fieldKey)->where('resolution_status', 'PENDING')->exists()) {
-                    continue;
-                }
-                $created[] = ConflictPolicy::create([
-                    'profile_id' => $profile->id,
-                    'field_name' => $fieldKey,
-                    'field_type' => 'EXTENDED',
-                    'old_value' => $current === null ? null : (string) $current,
-                    'new_value' => $proposed === null ? null : (string) $proposed,
-                    'source' => 'SYSTEM',
-                    'detected_at' => now(),
-                    'resolution_status' => 'PENDING',
-                ]);
-            }
-        }
+        // Extended fields obey the same rule, and had a second defect of their
+        // own: this loop walked the union of stored and proposed keys, so a
+        // field simply ABSENT from the payload was read as a proposal to empty
+        // it. Omission is not a proposal.
 
         return new ConflictDetectionResult($created, $requiresAdmin);
+    }
+
+    /**
+     * Would this write REPLACE an answer that is already on the profile?
+     *
+     * Separate from detection on purpose. Detection answers "does the machine
+     * have anything to add", and since the rule above it never has anything to
+     * argue, it now writes nothing. This answers a different question, asked by
+     * MatrimonyProfile's save guard: is a governed field being overwritten
+     * directly, behind MutationService's back? That guard aborts the save, so
+     * it must not leave a PENDING row behind for a change that never happened —
+     * which is one way profiles ended up frozen with nothing to resolve.
+     *
+     * @param  array<string, mixed>  $proposedCore
+     */
+    public static function wouldOverwriteAnsweredField(MatrimonyProfile $profile, array $proposedCore): array
+    {
+        $overwritten = [];
+
+        foreach (self::getCoreFieldKeysFromRegistry() as $fieldKey) {
+            if (! array_key_exists($fieldKey, $proposedCore)) {
+                continue;
+            }
+            if (self::isDraft($profile)) {
+                continue;
+            }
+            $current = self::normalize(self::getCurrentCoreValue($profile, $fieldKey));
+            if ($current === null) {
+                continue;
+            }
+            if (self::valuesDiffer($current, self::normalize($proposedCore[$fieldKey]))) {
+                $overwritten[] = $fieldKey;
+            }
+        }
+
+        return $overwritten;
     }
 
     /**
