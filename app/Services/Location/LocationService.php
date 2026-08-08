@@ -294,6 +294,9 @@ class LocationService
             ->where(function ($q) use ($primary, $primaryLike, $geo): void {
                 $q->where('name', 'like', $primaryLike)
                     ->orWhere('slug', 'like', $primaryLike);
+                if (SchemaPresence::hasColumn($geo, 'name_en')) {
+                    $q->orWhere('name_en', 'like', $primaryLike);
+                }
                 if (SchemaPresence::hasColumn($geo, 'name_mr')) {
                     $q->orWhere('name_mr', 'like', $primaryLike);
                 }
@@ -322,6 +325,9 @@ class LocationService
                         $q->orWhere(function ($inner) use ($tl, $geo): void {
                             $inner->where('name', 'like', $tl)
                                 ->orWhere('slug', 'like', $tl);
+                            if (SchemaPresence::hasColumn($geo, 'name_en')) {
+                                $inner->orWhere('name_en', 'like', $tl);
+                            }
                             if (SchemaPresence::hasColumn($geo, 'name_mr')) {
                                 $inner->orWhere('name_mr', 'like', $tl);
                             }
@@ -486,18 +492,38 @@ class LocationService
      */
     private function locationSearchHaystack(Location $loc): string
     {
-        $parts = [mb_strtolower(trim($loc->localizedName()), 'UTF-8')];
+        // Every spelling of every rung, not the request-locale one: the member
+        // types in whichever script their keyboard is in, and "विटा सांगली"
+        // must find Vita even when the request came in as English (and "Vita
+        // Sangli" must find विटा under a Marathi locale).
+        $parts = $this->locationNameVariants($loc);
         $cur = $loc->parent;
         $guard = 0;
         while ($cur !== null && $guard++ < 28) {
-            $parts[] = mb_strtolower(trim($cur->localizedName()), 'UTF-8');
+            array_push($parts, ...$this->locationNameVariants($cur));
             if (! $cur->relationLoaded('parent')) {
                 $cur->load('parent');
             }
             $cur = $cur->parent;
         }
 
-        return implode(' ', array_filter($parts, static fn (string $s): bool => $s !== ''));
+        return implode(' ', $parts);
+    }
+
+    /**
+     * @return list<string> Lowercased non-empty name spellings of one row.
+     */
+    private function locationNameVariants(Location $loc): array
+    {
+        $out = [];
+        foreach ([$loc->name, $loc->name_en ?? null, $loc->name_mr ?? null] as $name) {
+            $name = mb_strtolower(trim((string) $name), 'UTF-8');
+            if ($name !== '' && ! in_array($name, $out, true)) {
+                $out[] = $name;
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -522,14 +548,23 @@ class LocationService
      */
     private function multiTokenRank(Location $loc, array $tokens): array
     {
-        $nameLower = mb_strtolower(trim((string) $loc->name), 'UTF-8');
         $t0 = $tokens[0];
-        $exactName = $nameLower === $t0 ? 0 : 1;
-        $startsName = str_starts_with($nameLower, $t0) ? 0 : 1;
+        // Judge the first token against every spelling the row has, so a
+        // Devanagari query ranks a Latin-named row as the exact match it is.
+        $variants = $this->locationNameVariants($loc);
+        $nameLower = $variants[0] ?? '';
+        $exactName = in_array($t0, $variants, true) ? 0 : 1;
+        $startsName = 1;
+        foreach ($variants as $variant) {
+            if (str_starts_with($variant, $t0)) {
+                $startsName = 0;
+                break;
+            }
+        }
         $wordBoundary = preg_match('/(^|[\s,\-])'.preg_quote($t0, '/').'($|[\s,\-])/u', $this->locationSearchHaystack($loc)) ? 0 : 1;
 
         $typeOrder = match ((string) ($loc->hierarchy ?? '')) {
-            'village' => strtolower(trim((string) ($loc->category ?? ''))) === 'city' ? 0 : 2,
+            'village' => strtolower(trim((string) ($loc->tag ?? $loc->category ?? ''))) === 'city' ? 0 : 2,
             'taluka' => 3,
             'district' => 4,
             'state' => 5,
