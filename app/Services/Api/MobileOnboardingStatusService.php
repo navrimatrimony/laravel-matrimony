@@ -6,6 +6,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\MobileOnboardingDraft;
 use App\Models\User;
 use App\Services\Onboarding\ActivationChecklistService;
+use App\Services\ProfileFieldConfigurationService;
 use App\Services\Onboarding\MobileOnboardingDraftService;
 use App\Services\Onboarding\RegistrationPartnerPreferenceService;
 
@@ -63,6 +64,15 @@ class MobileOnboardingStatusService
             'top_blocker' => $topBlocker,
             'remaining_blockers' => $remainingBlockers,
             'activation_progress' => $this->checklistService->activationProgress($user, $profile, $draft, $items),
+            // Which fields the profile cannot go live without. The app was
+            // labelling one of them "(Optional)" in its own edit form, so a
+            // member could reasonably skip it and never learn that skipping it
+            // is why nobody can find them. Admins change this set in the field
+            // configuration; nothing about it belongs compiled into an app.
+            'mandatory_fields' => array_values(array_intersect(
+                ProfileFieldConfigurationService::getMandatoryFieldKeys(),
+                ProfileFieldConfigurationService::getEnabledFieldKeys()
+            )),
             'next_step' => $nextStep,
             'pending_location' => $this->checklistService->pendingLocationPayload($draft),
             'account_state' => $this->otpService->accountStateFor($user),
