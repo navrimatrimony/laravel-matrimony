@@ -134,22 +134,46 @@ class ConflictDetectionService
      */
     public static function wouldOverwriteAnsweredField(MatrimonyProfile $profile, array $proposedCore): array
     {
+        if (self::isDraft($profile)) {
+            return [];
+        }
+
+        $seriousIntentId = $profile->serious_intent_id ?? null;
+        $seriousIntentActive = $seriousIntentId !== null && $seriousIntentId !== '';
+
         $overwritten = [];
 
         foreach (self::getCoreFieldKeysFromRegistry() as $fieldKey) {
             if (! array_key_exists($fieldKey, $proposedCore)) {
                 continue;
             }
-            if (self::isDraft($profile)) {
+            // The exemptions below are the ones detection has always applied
+            // before it would refuse anything. Losing them here would make this
+            // guard stricter than the rule it replaced: a locked field is
+            // already refused by the caller with a clearer message, a dynamic
+            // field is expected to move on its own, and a field that is already
+            // waiting on a human is being handled, not re-refused.
+            if (ProfileFieldLockService::isLocked($profile, $fieldKey)) {
+                continue;
+            }
+            if (self::isDynamicField($fieldKey) && ! $seriousIntentActive) {
                 continue;
             }
             $current = self::normalize(self::getCurrentCoreValue($profile, $fieldKey));
             if ($current === null) {
                 continue;
             }
-            if (self::valuesDiffer($current, self::normalize($proposedCore[$fieldKey]))) {
-                $overwritten[] = $fieldKey;
+            if (! self::valuesDiffer($current, self::normalize($proposedCore[$fieldKey]))) {
+                continue;
             }
+            if (ConflictRecord::where('profile_id', $profile->id)
+                ->where('field_name', $fieldKey)
+                ->where('resolution_status', 'PENDING')
+                ->exists()) {
+                continue;
+            }
+
+            $overwritten[] = $fieldKey;
         }
 
         return $overwritten;
